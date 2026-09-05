@@ -2445,6 +2445,7 @@
                                     <option value="Production">Production</option>
                                     <option value="Packaging">Packaging</option>
                                     <option value="Print room">Print room</option>
+                                    <option value="Assembly">Assembly</option>
                                 </select>
                             </div>
                         </div>
@@ -2521,21 +2522,23 @@
                     </button>
                 </div>
 
+                <p style="margin:0 0 18px;color:var(--text-secondary);font-size:13px;">
+                    Running stock totals of every 3D-printed part, broken down by color. Quantities used in the
+                    Assembly Portal are deducted directly from the matching Black or White printed quantity, and the
+                    Total Printed value is updated automatically when an assembly is created, updated, or deleted.
+                </p>
+
+                <div class="metrics-grid" style="margin-bottom:20px;">
+                    <div class="metric-card"><div class="metric-icon"><i class="fas fa-cubes"></i></div><div><div class="metric-label">TOTAL PARTS REMAINING</div><div class="metric-value" id="pcTotalPartsPrinted">0</div></div></div>
+                    <div class="metric-card"><div class="metric-icon"><i class="fas fa-triangle-exclamation"></i></div><div><div class="metric-label">TOTAL DAMAGED</div><div class="metric-value" id="pcTotalPartsDamaged">0</div></div></div>
+                    <div class="metric-card"><div class="metric-icon"><i class="fas fa-screwdriver-wrench"></i></div><div><div class="metric-label">USED IN ASSEMBLY</div><div class="metric-value" id="pcTotalPartsUsed">0</div></div></div>
+                </div>
+
                 <div class="search-analytics-section">
                     <div class="search-container">
-                        <select id="pcSearchOption" class="search-select">
-                            <option value="Search">Search</option>
-                            <option value="Toy ID">Toy ID</option>
-                            <option value="Toy Name">Toy Name</option>
-                        </select>
-                        <input type="text" id="pcSearchValue" class="search-input" placeholder="Enter search value">
-                        <button class="search-btn" onclick="searchProductComponents()">
-                            <i class="fas fa-search"></i>
-                            Search
-                        </button>
-                        <button class="show-all-btn" onclick="showAllProductComponents()">
-                            <i class="fas fa-list"></i>
-                            Show All
+                        <button class="show-all-btn" onclick="loadProductComponentsData()">
+                            <i class="fas fa-rotate"></i>
+                            Refresh Totals
                         </button>
                     </div>
                 </div>
@@ -2545,16 +2548,19 @@
                         <table class="employee-table">
                             <thead>
                                 <tr>
-                                    <th>Toy ID</th>
-                                    <th>Toy Name</th>
-                                    <th>Components (Qty)</th>
+                                    <th>Printed Part</th>
+                                    <th>Black Printed (Remaining)</th>
+                                    <th>White Printed (Remaining)</th>
+                                    <th>Black Damaged (Total)</th>
+                                    <th>White Damaged (Total)</th>
+                                    <th>Total Printed (Remaining)</th>
                                 </tr>
                             </thead>
                             <tbody id="pcTableBody">
                                 <tr>
-                                    <td colspan="3" class="loading">
+                                    <td colspan="8" class="loading">
                                         <div class="spinner"></div>
-                                        <p>Loading toy component data...</p>
+                                        <p>Loading printed part totals...</p>
                                     </td>
                                 </tr>
                             </tbody>
@@ -2564,77 +2570,58 @@
 
                 <div class="supplier-form-section">
                     <div class="form-header">
-                        <i class="fas fa-edit"></i>
-                        <span>Toy Details</span>
-                    </div>
-                    <div class="form-container">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="pcToyIdInput">Toy ID (auto-generated)</label>
-                                <input type="text" id="pcToyIdInput" class="form-input" readonly style="opacity: 0.7;">
-                            </div>
-                            <div class="form-group">
-                                <label for="pcToyNameInput">Toy Name</label>
-                                <input type="text" id="pcToyNameInput" class="form-input" placeholder="Enter Toy Name" onblur="updatePCIdPreview()">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-header" style="margin-top: 20px;">
                         <i class="fas fa-list-ul"></i>
-                        <span>Components Used</span>
+                        <span>Manage Printed Parts &amp; Amounts</span>
                     </div>
+                    <p style="margin:0 0 12px;color:var(--text-secondary);font-size:12px;">
+                        Click a row in the table above to load that part for editing. <strong>Add</strong> creates a brand new
+                        component (with an optional starting amount). <strong>Update</strong> renames the selected part and/or
+                        sets its manual amount adjustment — this is added on top of whatever the Filament Tracker has already
+                        totaled for it. <strong>Delete</strong> removes the part (and any manual amount) from this list going
+                        forward; its historical filament records stay untouched.
+                    </p>
                     <div class="form-container">
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="pcComponentSelect">Component</label>
-                                <select id="pcComponentSelect" class="form-select">
-                                    <option value="">Select Component</option>
-                                </select>
+                                <label for="pcPartNameInput">Part Name</label>
+                                <input type="text" id="pcPartNameInput" class="form-input" placeholder="Enter Printed Part Name">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="pcPartBlackPrintedInput">Black Printed (manual amount)</label>
+                                <input type="number" id="pcPartBlackPrintedInput" class="form-input" min="0" step="1" value="0">
                             </div>
                             <div class="form-group">
-                                <label for="pcComponentQuantityInput">Quantity Used</label>
-                                <input type="number" id="pcComponentQuantityInput" class="form-input" min="0" step="any">
+                                <label for="pcPartWhitePrintedInput">White Printed (manual amount)</label>
+                                <input type="number" id="pcPartWhitePrintedInput" class="form-input" min="0" step="1" value="0">
                             </div>
-                            <div class="form-group" style="display: flex; align-items: flex-end;">
-                                <button type="button" class="action-btn add-btn" onclick="addComponentToPC()" style="width: 100%;">
-                                    <i class="fas fa-plus"></i>
-                                    Add Component
-                                </button>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="pcPartBlackDamagedInput">Black Damaged (manual amount)</label>
+                                <input type="number" id="pcPartBlackDamagedInput" class="form-input" min="0" step="1" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="pcPartWhiteDamagedInput">White Damaged (manual amount)</label>
+                                <input type="number" id="pcPartWhiteDamagedInput" class="form-input" min="0" step="1" value="0">
                             </div>
                         </div>
                     </div>
-                    <div class="table-container">
-                        <div class="table-wrapper">
-                            <table class="employee-table">
-                                <thead>
-                                    <tr>
-                                        <th>Component</th>
-                                        <th>Quantity Used</th>
-                                        <th>Remove</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="pcComponentsTableBody">
-                                    <tr><td colspan="3" class="loading"><p>No components added yet</p></td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
                     <div class="form-actions">
-                        <button class="action-btn add-btn" onclick="addProductComponentToy()">
+                        <button class="action-btn add-btn" onclick="addPrintedPart()">
                             <i class="fas fa-plus"></i>
-                            Add Toy
+                            Add Component
                         </button>
-                        <button class="action-btn update-btn" onclick="updateProductComponentToy()">
+                        <button class="action-btn update-btn" onclick="updatePrintedPart()">
                             <i class="fas fa-edit"></i>
                             Update
                         </button>
-                        <button class="action-btn delete-btn" onclick="deleteProductComponentToy()">
+                        <button class="action-btn delete-btn" onclick="deletePrintedPart()">
                             <i class="fas fa-trash"></i>
                             Delete
                         </button>
-                        <button class="action-btn clear-btn" onclick="clearPCForm()">
+                        <button class="action-btn clear-btn" onclick="clearPrintedPartForm()">
                             <i class="fas fa-broom"></i>
                             Clear
                         </button>
@@ -2675,7 +2662,7 @@
                     <div class="search-container">
                         <select id="assemblySearchOption" class="search-select">
                             <option value="all">All Fields</option>
-                            <option value="id">Assembly ID</option>
+                            <option value="printedPart">Printed Part</option>
                             <option value="product">Product</option>
                             <option value="assembler">Assembler</option>
                             <option value="status">Status</option>
@@ -2696,8 +2683,8 @@
                         <table class="employee-table">
                             <thead>
                                 <tr>
-                                    <th>Assembly ID</th>
-                                    <th>Product</th>
+                                    <th>Printed Part</th>
+                                    <th>Product / Toy</th>
                                     <th>Quantity</th>
                                     <th>Assembler</th>
                                     <th>Start Date</th>
@@ -2726,9 +2713,13 @@
                     </div>
                     <div class="form-container">
                         <div class="form-row">
+                            <input id="assemblyIdInput" type="hidden">
                             <div class="form-group">
-                                <label>Assembly ID</label>
-                                <input id="assemblyIdInput" class="form-input" placeholder="ASM-001">
+                                <label>Printed Part / Color</label>
+                                <select id="assemblyPrintedPartInput" class="form-select" onchange="updatePrintedPartUsageAvailability()">
+                                    <option value="">Select Printed Part</option>
+                                </select>
+                                <small id="assemblyPrintedPartStockLabel" style="color:var(--text-secondary);"></small>
                             </div>
                             <div class="form-group">
                                 <label>Product / Toy</label>
@@ -2945,7 +2936,7 @@
                     <div class="table-container">
                         <div class="table-wrapper">
                             <table class="employee-table">
-                                <thead><tr><th>Time</th><th>Black Printed</th><th>White Printed</th><th>Black Damaged</th><th>White Damaged</th><th>Black Filament</th><th>White Filament</th></tr></thead>
+                                <thead><tr><th>Time</th><th>Printed Parts (by Color)</th><th>Black Printed</th><th>White Printed</th><th>Black Damaged</th><th>White Damaged</th><th>Black Filament</th><th>White Filament</th></tr></thead>
                                 <tbody id="todayPrintingHistoryBody"></tbody>
                             </table>
                         </div>
@@ -3238,8 +3229,8 @@
         const workflowConfigs = {
             assembly: { node: 'assembly_data', portalId: 'assemblyManagementPortal', tableId: 'assemblyTableBody', 
                 searchOption: 'assemblySearchOption', searchInput: 'assemblySearchValue', 
-                fields: ['id','product','quantity','assembler','startDate','completionDate','status'], 
-                labels: ['Assembly ID','Product','Quantity','Assembler','Start Date','Completion Date','Status'] }
+                fields: ['id','printedPart','product','quantity','assembler','startDate','completionDate','status'], 
+                labels: ['Record ID','Printed Part','Product / Toy','Quantity','Assembler','Start Date','Completion Date','Status'] }
         };
 
         let selectedWorkflow = { assembly: null };
@@ -3248,10 +3239,8 @@
         let selectedCategoryRow = null;
         let selectedCategoryId = null;
         let selectedSupplierRow = null;
-        let selectedPCRow = null;
-        let selectedPCId = null;
-        let currentPCComponents = {};
-        let pcComponentCache = {};
+        // (Product Components Portal now derives its data from filament_printing_daily_data — see below)
+
         let selectedRDComponentRow = null;
         let selectedRDComponentId = null;
         let packagingRawBatch = [];
@@ -3974,10 +3963,76 @@
         function refreshCategoryData() { loadCategoryData(); }
 
         // ============================================================
+        // ASSEMBLY / OCTOPUS COMPONENT SEED (from the supplied inventory sheet)
+        // These are only added when the Components Portal is opened, and only
+        // when the same component is not already present in Firebase.
+        // ============================================================
+        const ASSEMBLY_SECTION_COMPONENTS = [
+            ["ASM-001","Octopus (Assembly)","PCB","Assembled",81,"F"],
+            ["ASM-002","Octopus (Assembly)","Barrel Jack with 2 Pin JST","Barrel Jack with 2 Pin JST",6,"E"],
+            ["ASM-003","Octopus (Assembly)","2 pin JST with LED","2 pin JST with LED Milky Yellow",158,"G"],
+            ["ASM-004","Octopus (Assembly)","4 pin JST with Milky Yellow LED","4 pin JST with Milky Yellow LED",77,"G"],
+            ["ASM-005","Octopus (Assembly)","White LED with Cap","White LED with Cap",0,"G"],
+            ["ASM-006","Octopus (Assembly)","Metal Servo with Mount","White",0,""],
+            ["ASM-007","Octopus (Assembly)","Metal Servo with Mount","Black",0,""],
+            ["ASM-008","Octopus (Assembly)","Plastic Servo with Mount","White",169,"RnD Room"],
+            ["ASM-009","Octopus (Assembly)","Plastic Servo with Mount","Black",202,"RnD Room"],
+            ["ASM-010","Octopus (Assembly)","Left Lid Arm with Horn","White",10,"F"],
+            ["ASM-011","Octopus (Assembly)","Left Lid Arm with Horn","Black",27,"F"],
+            ["ASM-012","Octopus (Assembly)","Right Lid Arm with Horn","White",16,"F"],
+            ["ASM-013","Octopus (Assembly)","Right Lid Arm with Horn","Black",18,"F"],
+            ["ASM-014","Octopus (Assembly)","Octo Arm with Horn","White - Purple",145,"E"],
+            ["ASM-015","Octopus (Assembly)","Octo Arm with Horn","White - Pink",69,"E"],
+            ["ASM-016","Octopus (Assembly)","Octo Arm with Horn","White - Green",30,"E"],
+            ["ASM-017","Octopus (Assembly)","Octo Arm with Horn","White - Yellow",15,"E"],
+            ["ASM-018","Octopus (Assembly)","Octo Arm with Horn","White - Blue",40,"E"],
+            ["ASM-019","Octopus (Assembly)","Octo Arm with Horn","Black - Purple",51,"E"],
+            ["ASM-020","Octopus (Assembly)","Octo Arm with Horn","Black - Hot Pink",0,"E"],
+            ["ASM-021","Octopus (Assembly)","Octo Arm with Horn","Black - Green",25,"E"],
+            ["ASM-022","Octopus (Assembly)","Octo Arm with Horn","Black - Yellow",50,"E"],
+            ["ASM-023","Octopus (Assembly)","Octo Arm with Horn","Black - Blue",51,"E"],
+            ["ASM-024","Octopus (Packaging Prepared)","3kg Box","3kg Box Assembled with Stickers",14,"Packing Room"],
+            ["ASM-025","Octopus (Packaging Prepared)","Foam","8mm Foam Round",18,"Packing Room"],
+            ["ASM-026","Octopus (Packaging Prepared)","Foam","8mm Foam Round Assembled",44,"Packing Room"],
+            ["ASM-027","Octopus (Packaging Prepared)","Foam","12mm Foam cylinder",12,"Packing Room"],
+            ["ASM-028","Octopus (Packaging Prepared)","Foam","12mm Foam Mushrooms",40,"Packing Room"],
+            ["ASM-029","Octopus (Packaging Prepared)","Bubble Wrap Bag","Bubble Wrap Bag",145,"Packing Room"],
+            ["ASM-030","Octopus (Packaging Prepared)","USB Power Cable","USB Male + 22AWG wire + Barrel Jack Male + Heat Sleeves",27,""],
+            ["ASM-031","Octopus (Packaging Prepared)","Support","Cylinder Support","~40","Packing Room"],
+            ["ASM-032","Octopus (Packaging Prepared)","Support","Triangle Support","~110","Packing Room"]
+        ];
+
+        async function ensureAssemblySectionComponents() {
+            const database = window.firebaseDatabase;
+            if (!database) return;
+            const { ref, get, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+            const snap = await get(ref(database, 'component_data'));
+            const data = snap.exists() ? snap.val() : {};
+            const updates = {};
+            const existing = Object.entries(data);
+
+            for (const [id, category, subCategory, name, quantity, location] of ASSEMBLY_SECTION_COMPONENTS) {
+                const alreadyExists = existing.some(([existingId, c]) =>
+                    existingId === id ||
+                    (c && String(c.name || '').trim().toLowerCase() === String(name).trim().toLowerCase()
+                        && String(c.category || '').trim().toLowerCase() === category.toLowerCase()
+                        && String(c.subCategory || '').trim().toLowerCase() === subCategory.toLowerCase())
+                );
+                if (!alreadyExists) {
+                    updates[`component_data/${id}`] = {
+                        name, section: "Assembly", category, subCategory,
+                        quantity, supplier: "", reorderLevel: 0, location: location || "", datasheet: ""
+                    };
+                }
+            }
+            if (Object.keys(updates).length) await update(ref(database), updates);
+        }
+
+        // ============================================================
         // COMPONENTS PORTAL
         // ============================================================
 
-        const COMPONENT_PORTAL_SECTIONS = new Set(['production', 'packaging', 'print room']);
+        const COMPONENT_PORTAL_SECTIONS = new Set(['production', 'packaging', 'print room', 'assembly']);
 
         function isComponentPortalAllowed(component) {
             if (!component) return false;
@@ -4027,6 +4082,7 @@
                 entries.forEach(([id,c]) => {
                     const { rowStyle, html } = componentRowHTML(id, c);
                     const row = document.createElement('tr');
+                    row.dataset.componentId = id;
                     if (rowStyle) row.style.cssText = rowStyle;
                     row.onclick = () => selectComponentRow(row, id, c);
                     row.innerHTML = html;
@@ -4198,8 +4254,17 @@
                 const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
                 await update(ref(database, `component_data/${id}`), data);
                 showModal('Success', 'Component updated');
-                loadComponentData();
-                clearComponentForm();
+
+                // Reload the table, then restore the selection to the component
+                // that was just edited instead of leaving the selection at the top.
+                await loadComponentData();
+                const updatedRow = Array.from(document.querySelectorAll('#componentsTableBody tr'))
+                    .find(row => row.dataset.componentId === id);
+                if (updatedRow) {
+                    const updatedData = { ...data };
+                    selectComponentRow(updatedRow, id, updatedData);
+                    updatedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
             } catch (e) { showModal('Error', e.message); }
         }
 
@@ -4235,6 +4300,7 @@
                 if (match) {
                     const { rowStyle, html } = componentRowHTML(id, c);
                     const row = document.createElement('tr');
+                    row.dataset.componentId = id;
                     if (rowStyle) row.style.cssText = rowStyle;
                     row.onclick = () => selectComponentRow(row, id, c);
                     row.innerHTML = html;
@@ -4262,12 +4328,13 @@
             loadComponentSupplierOptions();
         }
 
-        function openComponentsPortal() {
+        async function openComponentsPortal() {
             hideAllPortals();
             document.getElementById('componentsManagementPortal').style.display = 'block';
             document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
             document.querySelectorAll('.menu-item')[8].classList.add('active');
             closeSidebar();
+            await ensureAssemblySectionComponents();
             loadComponentCategoryOptions();
             loadComponentSupplierOptions();
             loadComponentData();
@@ -4281,6 +4348,8 @@
 
         // ============================================================
         // PRODUCT COMPONENTS PORTAL
+        // (Totals of every printed part, aggregated across all filament
+        //  printing records, broken down by color)
         // ============================================================
 
         function openProductComponentsPortal() {
@@ -4289,241 +4358,276 @@
             document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
             document.querySelectorAll('.menu-item')[9].classList.add('active');
             closeSidebar();
-            clearPCForm();
-            loadPCComponentOptions();
+            clearPrintedPartForm();
             loadProductComponentsData();
         }
 
         function closeProductComponentsPortal() {
             document.getElementById('productComponentsManagementPortal').style.display = 'none';
             document.getElementById('dashboardContent').style.display = 'block';
-            clearPCForm();
+            clearPrintedPartForm();
         }
 
-        async function loadPCComponentOptions() {
+        // ---- Master printed-parts list (persisted in Firebase, drives
+        //      both this portal and the Filament Tracker's part rows) ----
+
+        async function fetchPrintedPartsMaster() {
+            const database = window.firebaseDatabase;
+            if (!database) throw new Error('Firebase database not initialized');
+            const { ref, get, set } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+            const snap = await get(ref(database, 'printed_parts_master'));
+            if (snap.exists()) {
+                const val = snap.val();
+                const list = Array.isArray(val) ? val.filter(Boolean) : Object.values(val).filter(Boolean);
+                return list;
+            }
+            // First run: seed Firebase with the built-in default list.
+            await set(ref(database, 'printed_parts_master'), PRINTED_PARTS);
+            return PRINTED_PARTS.slice();
+        }
+
+        async function syncPrintedPartsMaster() {
             try {
-                const data = await fetchComponentData();
-                pcComponentCache = {};
-                const select = document.getElementById('pcComponentSelect');
-                select.innerHTML = '<option value="">Select Component</option>';
-                if (data) {
-                    const entries = Array.isArray(data) ? data.map((c,i) => [i,c]).filter(([,c])=>c) : Object.entries(data);
-                    entries.forEach(([id,c]) => {
-                        pcComponentCache[id] = c;
-                        const opt = document.createElement('option');
-                        opt.value = id;
-                        opt.textContent = c.name || id;
-                        select.appendChild(opt);
-                    });
-                }
+                PRINTED_PARTS = await fetchPrintedPartsMaster();
             } catch (e) { console.error(e); }
         }
 
-        function addComponentToPC() {
-            const compId = document.getElementById('pcComponentSelect').value;
-            const qty = parseFloat(document.getElementById('pcComponentQuantityInput').value);
-            if (!compId) { showModal('Error', 'Select a component'); return; }
-            if (!qty || qty <= 0) { showModal('Error', 'Enter a valid quantity'); return; }
-            currentPCComponents[compId] = qty;
-            document.getElementById('pcComponentQuantityInput').value = '';
-            renderPCComponentsTable();
+        let selectedPrintedPartRow = null;
+        let selectedPrintedPartName = null;
+        let manualComponentCache = {};
+
+        function readPartAmountInputs() {
+            const num = id => Number(document.getElementById(id)?.value || 0);
+            return {
+                blackPrinted: num('pcPartBlackPrintedInput'),
+                whitePrinted: num('pcPartWhitePrintedInput'),
+                blackDamaged: num('pcPartBlackDamagedInput'),
+                whiteDamaged: num('pcPartWhiteDamagedInput')
+            };
         }
 
-        function removeComponentFromPC(compId) {
-            delete currentPCComponents[compId];
-            renderPCComponentsTable();
+        function writePartAmountInputs(amounts) {
+            const a = amounts || { blackPrinted: 0, whitePrinted: 0, blackDamaged: 0, whiteDamaged: 0 };
+            document.getElementById('pcPartBlackPrintedInput').value = a.blackPrinted || 0;
+            document.getElementById('pcPartWhitePrintedInput').value = a.whitePrinted || 0;
+            document.getElementById('pcPartBlackDamagedInput').value = a.blackDamaged || 0;
+            document.getElementById('pcPartWhiteDamagedInput').value = a.whiteDamaged || 0;
         }
 
-        function renderPCComponentsTable() {
-            const tbody = document.getElementById('pcComponentsTableBody');
-            const ids = Object.keys(currentPCComponents);
-            if (ids.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="loading"><p>No components added</p></td></tr>';
-                return;
-            }
-            tbody.innerHTML = '';
-            ids.forEach(id => {
-                const comp = pcComponentCache[id];
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${comp ? comp.name : id}</td>
-                    <td>${currentPCComponents[id]}</td>
-                    <td><button type="button" class="action-btn delete-btn" style="padding:4px 10px;" onclick="removeComponentFromPC('${id}')"><i class="fas fa-times"></i></button></td>
-                `;
-                tbody.appendChild(row);
-            });
+        async function fetchManualComponentData() {
+            const database = window.firebaseDatabase;
+            if (!database) throw new Error('Firebase database not initialized');
+            const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+            const snap = await get(ref(database, 'product_components_manual_data'));
+            return snap.exists() ? snap.val() : {};
         }
 
-        async function fetchProductComponentsData() {
+        function selectPrintedPartRow(row, name) {
+            if (selectedPrintedPartRow) selectedPrintedPartRow.style.backgroundColor = '';
+            row.style.backgroundColor = 'rgba(108, 99, 255, 0.2)';
+            selectedPrintedPartRow = row;
+            selectedPrintedPartName = name;
+            document.getElementById('pcPartNameInput').value = name;
+            writePartAmountInputs(manualComponentCache[name]);
+        }
+
+        function clearPrintedPartForm() {
+            const input = document.getElementById('pcPartNameInput');
+            if (input) input.value = '';
+            writePartAmountInputs(null);
+            if (selectedPrintedPartRow) { selectedPrintedPartRow.style.backgroundColor = ''; selectedPrintedPartRow = null; }
+            selectedPrintedPartName = null;
+        }
+
+        async function addPrintedPart() {
+            const name = document.getElementById('pcPartNameInput').value.trim();
+            if (!name) { showModal('Error', 'Enter a part name'); return; }
             try {
+                await syncPrintedPartsMaster();
+                if (PRINTED_PARTS.some(p => p.toLowerCase() === name.toLowerCase())) {
+                    showModal('Error', 'This printed part already exists'); return;
+                }
                 const database = window.firebaseDatabase;
                 if (!database) throw new Error('Firebase database not initialized');
-                const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
-                const snap = await get(ref(database, 'product_components_data'));
-                return snap.exists() ? snap.val() : null;
-            } catch (e) { console.error(e); return null; }
-        }
-
-        async function updatePCIdPreview() {
-            if (selectedPCId) return;
-            const name = document.getElementById('pcToyNameInput').value.trim();
-            const field = document.getElementById('pcToyIdInput');
-            if (!name) { field.value = ''; return; }
-            const prefix = name.replace(/[^a-zA-Z]/g,'').substring(0,3).toUpperCase() || 'TOY';
-            try {
-                const data = await fetchProductComponentsData();
-                let max = 0;
-                if (data) {
-                    const entries = Array.isArray(data) ? data.map((p,i) => [i,p]).filter(([,p])=>p) : Object.entries(data);
-                    const pattern = new RegExp(`^${prefix}(\\d+)$`);
-                    entries.forEach(([id]) => { const m = id.match(pattern); if (m) max = Math.max(max, parseInt(m[1],10)); });
+                const { ref, set, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                const updated = [...PRINTED_PARTS, name];
+                const amounts = readPartAmountInputs();
+                const updates = { printed_parts_master: updated };
+                if (amounts.blackPrinted || amounts.whitePrinted || amounts.blackDamaged || amounts.whiteDamaged) {
+                    updates[`product_components_manual_data/${name}`] = amounts;
                 }
-                field.value = `${prefix}${String(max + 1).padStart(3, '0')}`;
-            } catch (e) { console.error(e); }
+                await update(ref(database), updates);
+                PRINTED_PARTS = updated;
+                showModal('Success', 'Component added');
+                clearPrintedPartForm();
+                await loadProductComponentsData();
+            } catch (e) { showModal('Error', e.message); }
         }
 
-        function pcRowHTML(id, p) {
-            const comps = p.components ? Object.entries(p.components).map(([cid,c]) => 
-                `${(c && c.componentName) || cid} (${(c && c.quantity) || 0})`).join(', ') : '';
-            return `<td>${id}</td><td>${p.toyName||''}</td><td>${comps}</td>`;
+        async function updatePrintedPart() {
+            const newName = document.getElementById('pcPartNameInput').value.trim();
+            if (!selectedPrintedPartName) { showModal('Error', 'Select a part from the table to update'); return; }
+            if (!newName) { showModal('Error', 'Enter a part name'); return; }
+            try {
+                await syncPrintedPartsMaster();
+                const renaming = newName !== selectedPrintedPartName;
+                if (renaming && PRINTED_PARTS.some(p => p.toLowerCase() === newName.toLowerCase())) {
+                    showModal('Error', 'A printed part with this name already exists'); return;
+                }
+                const database = window.firebaseDatabase;
+                if (!database) throw new Error('Firebase database not initialized');
+                const { ref, get, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+
+                const updates = {};
+                const amounts = readPartAmountInputs();
+
+                if (renaming) {
+                    const updatedList = PRINTED_PARTS.map(p => p === selectedPrintedPartName ? newName : p);
+
+                    // Migrate this part's history so past records line up under the new name.
+                    const snap = await get(ref(database, 'filament_printing_daily_data'));
+                    const all = snap.exists() ? snap.val() : {};
+                    const entries = workflowEntries(all);
+                    entries.forEach(([id, r]) => {
+                        const parts = r?.parts || {};
+                        if (Object.prototype.hasOwnProperty.call(parts, selectedPrintedPartName)) {
+                            const oldVal = parts[selectedPrintedPartName] || {};
+                            const existingVal = parts[newName];
+                            const merged = existingVal ? {
+                                blackPrinted: Number(existingVal.blackPrinted || 0) + Number(oldVal.blackPrinted || 0),
+                                blackDamaged: Number(existingVal.blackDamaged || 0) + Number(oldVal.blackDamaged || 0),
+                                whitePrinted: Number(existingVal.whitePrinted || 0) + Number(oldVal.whitePrinted || 0),
+                                whiteDamaged: Number(existingVal.whiteDamaged || 0) + Number(oldVal.whiteDamaged || 0)
+                            } : oldVal;
+                            updates[`filament_printing_daily_data/${id}/parts/${newName}`] = merged;
+                            updates[`filament_printing_daily_data/${id}/parts/${selectedPrintedPartName}`] = null;
+                        }
+                    });
+                    updates['printed_parts_master'] = updatedList;
+                    updates[`product_components_manual_data/${selectedPrintedPartName}`] = null;
+                    PRINTED_PARTS = updatedList;
+                }
+
+                // Manual amount adjustment always applies to whatever the part is now named.
+                updates[`product_components_manual_data/${newName}`] =
+                    (amounts.blackPrinted || amounts.whitePrinted || amounts.blackDamaged || amounts.whiteDamaged) ? amounts : null;
+
+                await update(ref(database), updates);
+                showModal('Success', renaming ? 'Component renamed and amounts updated' : 'Component amounts updated');
+                clearPrintedPartForm();
+                await loadProductComponentsData();
+            } catch (e) { showModal('Error', e.message); }
+        }
+
+        async function deletePrintedPart() {
+            if (!selectedPrintedPartName) { showModal('Error', 'Select a part from the table to delete'); return; }
+            if (!confirm(`Remove "${selectedPrintedPartName}" from the printed parts list? Its historical totals will still be shown below, but it will no longer appear in the Filament Tracker for new records.`)) return;
+            try {
+                await syncPrintedPartsMaster();
+                const updatedList = PRINTED_PARTS.filter(p => p !== selectedPrintedPartName);
+                const database = window.firebaseDatabase;
+                if (!database) throw new Error('Firebase database not initialized');
+                const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                await update(ref(database), {
+                    printed_parts_master: updatedList,
+                    [`product_components_manual_data/${selectedPrintedPartName}`]: null
+                });
+                PRINTED_PARTS = updatedList;
+                showModal('Success', 'Component removed from the list');
+                clearPrintedPartForm();
+                await loadProductComponentsData();
+            } catch (e) { showModal('Error', e.message); }
+        }
+
+        async function fetchAllPrintedPartTotals() {
+            const database = window.firebaseDatabase;
+            if (!database) throw new Error('Firebase database not initialized');
+            const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+            await syncPrintedPartsMaster();
+            const snap = await get(ref(database, 'filament_printing_daily_data'));
+            const all = snap.exists() ? snap.val() : {};
+            const entries = workflowEntries(all);
+            const totals = {};
+            PRINTED_PARTS.forEach(part => {
+                totals[part] = { blackPrinted: 0, whitePrinted: 0, blackDamaged: 0, whiteDamaged: 0 };
+            });
+            entries.forEach(([, r]) => {
+                Object.entries(r?.parts || {}).forEach(([part, p]) => {
+                    if (!totals[part]) totals[part] = { blackPrinted: 0, whitePrinted: 0, blackDamaged: 0, whiteDamaged: 0 };
+                    totals[part].blackPrinted += Number(p?.blackPrinted || 0);
+                    totals[part].whitePrinted += Number(p?.whitePrinted || 0);
+                    totals[part].blackDamaged += Number(p?.blackDamaged || 0);
+                    totals[part].whiteDamaged += Number(p?.whiteDamaged || 0);
+                });
+            });
+            manualComponentCache = await fetchManualComponentData();
+            Object.entries(manualComponentCache).forEach(([part, m]) => {
+                if (!m) return;
+                if (!totals[part]) totals[part] = { blackPrinted: 0, whitePrinted: 0, blackDamaged: 0, whiteDamaged: 0 };
+                totals[part].blackPrinted += Number(m.blackPrinted || 0);
+                totals[part].whitePrinted += Number(m.whitePrinted || 0);
+                totals[part].blackDamaged += Number(m.blackDamaged || 0);
+                totals[part].whiteDamaged += Number(m.whiteDamaged || 0);
+            });
+            return totals;
         }
 
         async function loadProductComponentsData() {
             const tbody = document.getElementById('pcTableBody');
-            tbody.innerHTML = '<tr><td colspan="3" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
             try {
-                const data = await fetchProductComponentsData();
-                if (!data) { tbody.innerHTML = '<tr><td colspan="3" class="loading"><p>No data</p></td></tr>'; return; }
-                tbody.innerHTML = '';
-                const entries = Array.isArray(data) ? data.map((p,i) => [i,p]).filter(([,p])=>p) : Object.entries(data);
-                entries.forEach(([id,p]) => {
-                    const row = document.createElement('tr');
-                    row.onclick = () => selectPCRow(row, id, p);
-                    row.innerHTML = pcRowHTML(id, p);
-                    tbody.appendChild(row);
+                const totals = await fetchAllPrintedPartTotals();
+                const usage = await getPrintedPartUsageMap();
+                const parts = Object.keys(totals);
+                Object.keys(usage).forEach(part => {
+                    if (!totals[part]) totals[part] = { blackPrinted: 0, whitePrinted: 0, blackDamaged: 0, whiteDamaged: 0 };
                 });
-            } catch (e) { tbody.innerHTML = '<tr><td colspan="3" class="loading"><p>Error loading</p></td></tr>'; }
-        }
-
-        function selectPCRow(row, id, p) {
-            if (selectedPCRow) selectedPCRow.style.backgroundColor = '';
-            row.style.backgroundColor = 'rgba(108, 99, 255, 0.2)';
-            selectedPCRow = row;
-            selectedPCId = id;
-            document.getElementById('pcToyIdInput').value = id;
-            document.getElementById('pcToyNameInput').value = p.toyName || '';
-            currentPCComponents = {};
-            if (p.components) {
-                Object.entries(p.components).forEach(([cid,c]) => {
-                    currentPCComponents[cid] = (c && c.quantity) || 0;
-                    if (!pcComponentCache[cid] && c && c.componentName) {
-                        pcComponentCache[cid] = { name: c.componentName };
-                    }
-                });
+                let grandPrinted = 0, grandDamaged = 0, grandUsed = 0;
+                if (!parts.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="loading"><p>No printed part data yet</p></td></tr>';
+                } else {
+                    tbody.innerHTML = '';
+                    parts.forEach(part => {
+                        const t = totals[part];
+                        const blackUsed = Number(usage[`${part}||black`] || 0);
+                        const whiteUsed = Number(usage[`${part}||white`] || 0);
+                        const legacyUsed = Number(usage[part] || 0);
+                        // New assembly records carry a color, so usage is deducted directly from
+                        // the matching Black or White quantity. Legacy records without a color
+                        // remain counted in the usage metric but do not get guessed into a color.
+                        const blackRemaining = Math.max(0, Number(t.blackPrinted || 0) - blackUsed);
+                        const whiteRemaining = Math.max(0, Number(t.whitePrinted || 0) - whiteUsed);
+                        const allColors = blackRemaining + whiteRemaining;
+                        const damaged = Number(t.blackDamaged || 0) + Number(t.whiteDamaged || 0);
+                        const used = blackUsed + whiteUsed + legacyUsed;
+                        grandPrinted += allColors;
+                        grandDamaged += damaged;
+                        grandUsed += used;
+                        const row = document.createElement('tr');
+                        row.style.cursor = 'pointer';
+                        row.title = 'Click to edit this component\'s name or manual amount';
+                        row.onclick = () => selectPrintedPartRow(row, part);
+                        const hasManual = manualComponentCache[part] &&
+                            (manualComponentCache[part].blackPrinted || manualComponentCache[part].whitePrinted ||
+                             manualComponentCache[part].blackDamaged || manualComponentCache[part].whiteDamaged);
+                        row.innerHTML = `
+                            <td><strong>${part}</strong>${hasManual ? ' <i class="fas fa-pen" title="Includes a manual amount" style="color:var(--accent);font-size:11px;"></i>' : ''}</td>
+                            <td>${blackRemaining}</td>
+                            <td>${whiteRemaining}</td>
+                            <td>${t.blackDamaged}</td>
+                            <td>${t.whiteDamaged}</td>
+                            <td><strong>${allColors}</strong></td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+                document.getElementById('pcTotalPartsPrinted').textContent = grandPrinted;
+                document.getElementById('pcTotalPartsDamaged').textContent = grandDamaged;
+                document.getElementById('pcTotalPartsUsed').textContent = grandUsed;
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="6" class="loading"><p>Error loading</p></td></tr>';
+                console.error(e);
             }
-            renderPCComponentsTable();
-        }
-
-        function readPCForm() {
-            const components = {};
-            Object.entries(currentPCComponents).forEach(([cid, qty]) => {
-                const comp = pcComponentCache[cid];
-                components[cid] = { componentName: comp ? comp.name : cid, quantity: qty };
-            });
-            return {
-                id: document.getElementById('pcToyIdInput').value.trim(),
-                data: {
-                    toyName: document.getElementById('pcToyNameInput').value.trim(),
-                    components
-                }
-            };
-        }
-
-        async function addProductComponentToy() {
-            const { id, data } = readPCForm();
-            if (!id || !data.toyName) { showModal('Error', 'Toy Name is required'); return; }
-            if (Object.keys(data.components).length === 0) { showModal('Error', 'Add at least one component'); return; }
-            try {
-                const database = window.firebaseDatabase;
-                if (!database) throw new Error('Firebase database not initialized');
-                const { ref, get, set } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
-                const pcRef = ref(database, `product_components_data/${id}`);
-                if ((await get(pcRef)).exists()) { showModal('Error', 'Toy already exists'); return; }
-                await set(pcRef, data);
-                showModal('Success', 'Toy added');
-                loadProductComponentsData();
-                clearPCForm();
-            } catch (e) { showModal('Error', e.message); }
-        }
-
-        async function updateProductComponentToy() {
-            const { id, data } = readPCForm();
-            if (!id) { showModal('Error', 'Select a toy to update'); return; }
-            try {
-                const database = window.firebaseDatabase;
-                if (!database) throw new Error('Firebase database not initialized');
-                const { ref, set } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
-                await set(ref(database, `product_components_data/${id}`), data);
-                showModal('Success', 'Toy updated');
-                loadProductComponentsData();
-                clearPCForm();
-            } catch (e) { showModal('Error', e.message); }
-        }
-
-        async function deleteProductComponentToy() {
-            if (!selectedPCId) { showModal('Error', 'Select a toy to delete'); return; }
-            if (!confirm('Delete this toy?')) return;
-            try {
-                const database = window.firebaseDatabase;
-                if (!database) throw new Error('Firebase database not initialized');
-                const { ref, remove } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
-                await remove(ref(database, `product_components_data/${selectedPCId}`));
-                showModal('Success', 'Toy deleted');
-                loadProductComponentsData();
-                clearPCForm();
-            } catch (e) { showModal('Error', e.message); }
-        }
-
-        async function searchProductComponents() {
-            const option = document.getElementById('pcSearchOption').value;
-            const value = document.getElementById('pcSearchValue').value.trim();
-            if (option === 'Search' || !value) { showModal('Error', 'Invalid search'); return; }
-            const data = await fetchProductComponentsData();
-            if (!data) { showModal('Info', 'No data'); return; }
-            const tbody = document.getElementById('pcTableBody');
-            tbody.innerHTML = '';
-            let found = false;
-            const entries = Array.isArray(data) ? data.map((p,i) => [i,p]).filter(([,p])=>p) : Object.entries(data);
-            entries.forEach(([id,p]) => {
-                let match = false;
-                if (option === 'Toy ID') match = String(id) === value;
-                else if (option === 'Toy Name') match = p.toyName === value;
-                if (match) {
-                    const row = document.createElement('tr');
-                    row.onclick = () => selectPCRow(row, id, p);
-                    row.innerHTML = pcRowHTML(id, p);
-                    tbody.appendChild(row);
-                    found = true;
-                }
-            });
-            if (!found) tbody.innerHTML = '<tr><td colspan="3" class="loading"><p>No matches</p></td></tr>';
-        }
-
-        function showAllProductComponents() {
-            document.getElementById('pcSearchOption').value = 'Search';
-            document.getElementById('pcSearchValue').value = '';
-            loadProductComponentsData();
-        }
-
-        function clearPCForm() {
-            document.getElementById('pcToyIdInput').value = '';
-            document.getElementById('pcToyNameInput').value = '';
-            document.getElementById('pcComponentSelect').value = '';
-            document.getElementById('pcComponentQuantityInput').value = '';
-            currentPCComponents = {};
-            renderPCComponentsTable();
-            if (selectedPCRow) { selectedPCRow.style.backgroundColor = ''; selectedPCRow = null; }
-            selectedPCId = null;
         }
 
         // ============================================================
@@ -4643,6 +4747,7 @@
             closeSidebar();
             document.getElementById('assemblyStartDateInput').valueAsDate = new Date();
             document.getElementById('assemblyQuantityInput').value = 1;
+            await loadAssemblyPrintedParts();
             await loadAssemblyProducts();
             await loadWorkflowData('assembly');
         }
@@ -4683,7 +4788,7 @@
                     const statusColor = r.status === 'Completed' ? 'var(--success)' : 
                                        r.status === 'In Progress' ? 'var(--warning)' : 'var(--danger)';
                     row.innerHTML = `
-                        <td>${id}</td>
+                        <td>${(() => { const p = parseAssemblyPrintedPart(r.printedPart); return p.part ? `${p.part}${p.color ? ' — ' + p.color.charAt(0).toUpperCase() + p.color.slice(1) : ''}` : ''; })()}</td>
                         <td>${r.product || ''}</td>
                         <td>${r.quantity || 0}</td>
                         <td>${r.assembler || ''}</td>
@@ -4727,13 +4832,25 @@
                 const r = found[1] || {};
                 selectedWorkflow[type] = id;
                 document.getElementById('assemblyIdInput').value = id;
-                document.getElementById('assemblyProductInput').value = r.product || '';
+                const printedPartSelect = document.getElementById('assemblyPrintedPartInput');
+                const storedPrintedPart = String(r.printedPart || '');
+                if (Array.from(printedPartSelect.options).some(o => o.value === storedPrintedPart)) {
+                    printedPartSelect.value = storedPrintedPart;
+                } else {
+                    const legacyOption = Array.from(printedPartSelect.options).find(o => o.dataset.part === storedPrintedPart);
+                    printedPartSelect.value = legacyOption ? legacyOption.value : '';
+                }
+                const productSelect = document.getElementById('assemblyProductInput');
+                const productOption = Array.from(productSelect.options).find(o => o.textContent === (r.product || ''));
+                productSelect.value = productOption ? productOption.value : '';
+                productSelect.dataset.selectedValue = productSelect.value;
                 document.getElementById('assemblyQuantityInput').value = r.quantity || 1;
                 document.getElementById('assemblyAssemblerInput').value = r.assembler || '';
                 document.getElementById('assemblyStartDateInput').value = r.startDate || '';
                 document.getElementById('assemblyCompletionDateInput').value = r.completionDate || '';
                 document.getElementById('assemblyStatusInput').value = r.status || 'Pending';
                 await loadAssemblyBOM();
+                await updatePrintedPartUsageAvailability(id);
                 const rows = document.querySelectorAll('#assemblyTableBody tr');
                 rows.forEach(row => row.style.backgroundColor = '');
                 const selectedRow = Array.from(rows).find(row => row.dataset.id === id);
@@ -4741,33 +4858,93 @@
             } catch (e) { showModal('Error', e.message); }
         }
 
-        async function loadAssemblyProducts() {
-            const select = document.getElementById('assemblyProductInput');
-            select.innerHTML = '<option value="">Select Product</option>';
+        async function loadAssemblyPrintedParts() {
+            const select = document.getElementById('assemblyPrintedPartInput');
+            if (!select) return;
+            const current = select.value;
+            select.innerHTML = '<option value="">Select Printed Part / Color</option>';
             try {
-                const data = await fetchComponentData();
-                if (data) {
-                    const entries = Array.isArray(data) ? data.map((c,i) => [i,c]).filter(([,c])=>c) : Object.entries(data);
-                    const assemblyItems = entries.filter(([,c]) => 
-                        c && c.category && c.category.toLowerCase().includes('octopus(assembly)')
-                    );
-                    assemblyItems.sort((a,b) => (a[1].name || '').localeCompare(b[1].name || ''));
-                    assemblyItems.forEach(([id,c]) => {
+                const parts = await fetchPrintedPartsMaster();
+                const uniqueParts = Array.from(new Set(parts.filter(Boolean).map(String).map(p => p.trim()).filter(Boolean)))
+                    .sort((a,b) => a.localeCompare(b));
+                uniqueParts.forEach(part => {
+                    ['Black', 'White'].forEach(color => {
+                        const value = `${part}||${color}`;
                         const opt = document.createElement('option');
-                        opt.value = id;
-                        opt.textContent = c.name || id;
+                        opt.value = value;
+                        opt.textContent = `${part} — ${color}`;
+                        opt.dataset.part = part;
+                        opt.dataset.color = color.toLowerCase();
                         select.appendChild(opt);
                     });
-                }
-                Object.keys(ASSEMBLY_BOM).forEach(name => {
-                    const existing = Array.from(select.options).some(o => o.textContent === name);
-                    if (!existing) {
-                        const opt = document.createElement('option');
-                        opt.value = name;
-                        opt.textContent = name + ' (BOM)';
-                        select.appendChild(opt);
-                    }
                 });
+                if (current && Array.from(select.options).some(o => o.value === current)) select.value = current;
+                await updatePrintedPartUsageAvailability();
+            } catch (e) { console.error(e); }
+        }
+
+        function assemblyPortalDisplayName(component) {
+            const itemName = String(component?.name || '').trim();
+            const subCategory = String(component?.subCategory || '').trim();
+            return itemName || subCategory;
+        }
+
+        async function loadAssemblyProducts() {
+            const select = document.getElementById('assemblyProductInput');
+            select.innerHTML = '<option value="">Select Item / Sub Category</option>';
+            try {
+                const data = await fetchComponentData();
+                const seen = new Set();
+                const entries = data ? Object.entries(data) : [];
+                const allowedCategories = new Set(['octopus (assembly)', 'octopus (packaging prepared)']);
+
+                entries.filter(([,c]) => c && allowedCategories.has(String(c.category || '').trim().toLowerCase()))
+                    .forEach(([id,c]) => {
+                        const displayName = assemblyPortalDisplayName(c);
+                        if (!displayName) return;
+                        const key = displayName.toLowerCase();
+                        if (seen.has(key)) return;
+                        seen.add(key);
+                        const opt = document.createElement('option');
+                        opt.value = id;
+                        opt.textContent = displayName;
+                        opt.dataset.category = c.category || '';
+                        opt.dataset.subCategory = c.subCategory || '';
+                        select.appendChild(opt);
+                    });
+
+                // Also expose the supplied inventory-sheet items immediately, even before
+                // the Components Portal has performed its one-time Firebase seed.
+                ASSEMBLY_SECTION_COMPONENTS
+                    .filter(([,category]) => allowedCategories.has(String(category || '').trim().toLowerCase()))
+                    .forEach(([id, category, subCategory, name]) => {
+                        const displayName = String(name || subCategory || '').trim();
+                        if (!displayName) return;
+                        const key = displayName.toLowerCase();
+                        if (seen.has(key)) return;
+                        seen.add(key);
+                        const opt = document.createElement('option');
+                        opt.value = id;
+                        opt.textContent = displayName;
+                        opt.dataset.category = category;
+                        opt.dataset.subCategory = subCategory;
+                        select.appendChild(opt);
+                    });
+
+                // Keep built-in BOM items available even if they are not yet in component_data.
+                Object.keys(ASSEMBLY_BOM).forEach(name => {
+                    const key = name.toLowerCase();
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = name;
+                    opt.dataset.category = 'Octopus (Assembly)';
+                    select.appendChild(opt);
+                });
+
+                const current = select.dataset.selectedValue || '';
+                if (current && Array.from(select.options).some(o => o.value === current)) select.value = current;
             } catch (e) { console.error(e); }
         }
 
@@ -4888,14 +5065,87 @@
             }
         }
 
+        function parseAssemblyPrintedPart(value) {
+            const raw = String(value || '').trim();
+            if (!raw) return { key: '', part: '', color: '' };
+            const marker = raw.indexOf('||');
+            if (marker === -1) return { key: raw, part: raw, color: '' };
+            return { key: raw, part: raw.slice(0, marker).trim(), color: raw.slice(marker + 2).trim().toLowerCase() };
+        }
+
+        async function getPrintedPartUsageMap(excludeAssemblyId = null) {
+            const database = window.firebaseDatabase;
+            if (!database) throw new Error('Firebase database not initialized');
+            const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+            const snap = await get(ref(database, 'assembly_data'));
+            const usage = {};
+            if (!snap.exists()) return usage;
+            Object.entries(snap.val() || {}).forEach(([id, record]) => {
+                if (excludeAssemblyId && id === excludeAssemblyId) return;
+                const selected = parseAssemblyPrintedPart(record?.printedPart);
+                if (!selected.part) return;
+                // Older assembly records without a color remain tracked under the part name.
+                const key = selected.color ? `${selected.part}||${selected.color}` : selected.part;
+                usage[key] = (usage[key] || 0) + (Number(record?.quantity) || 0);
+            });
+            return usage;
+        }
+
+        async function getPrintedPartTotalsWithUsage(excludeAssemblyId = null) {
+            const totals = await fetchAllPrintedPartTotals();
+            const usage = await getPrintedPartUsageMap(excludeAssemblyId);
+            return { totals, usage };
+        }
+
+        async function updatePrintedPartUsageAvailability(excludeAssemblyId = null) {
+            const label = document.getElementById('assemblyPrintedPartStockLabel');
+            const selected = parseAssemblyPrintedPart(document.getElementById('assemblyPrintedPartInput')?.value);
+            if (!label) return;
+            if (!selected.part) { label.textContent = ''; return; }
+            try {
+                const { totals, usage } = await getPrintedPartTotalsWithUsage(excludeAssemblyId);
+                const t = totals[selected.part] || { blackPrinted: 0, whitePrinted: 0, blackDamaged: 0, whiteDamaged: 0 };
+                const color = selected.color;
+                const printed = color === 'black' ? Number(t.blackPrinted || 0) : color === 'white' ? Number(t.whitePrinted || 0) : Number(t.blackPrinted || 0) + Number(t.whitePrinted || 0);
+                const damaged = color === 'black' ? Number(t.blackDamaged || 0) : color === 'white' ? Number(t.whiteDamaged || 0) : Number(t.blackDamaged || 0) + Number(t.whiteDamaged || 0);
+                const used = usage[selected.key] || usage[selected.part] || 0;
+                const available = Math.max(0, printed - damaged - used);
+                const colorLabel = selected.color ? selected.color.charAt(0).toUpperCase() + selected.color.slice(1) : 'All colors';
+                label.textContent = `${colorLabel} | Printed: ${printed} | Damaged: ${damaged} | Used in Assembly: ${used} | Available: ${available}`;
+            } catch (e) {
+                label.textContent = 'Usage balance unavailable';
+            }
+        }
+
+        async function validatePrintedPartUsage(partValue, quantity, excludeAssemblyId = null) {
+            const selected = parseAssemblyPrintedPart(partValue);
+            if (!selected.part) { showModal('Error', 'Select a printed part and color'); return false; }
+            if (!selected.color) { showModal('Error', 'Select the printed part color (Black or White)'); return false; }
+            const { totals, usage } = await getPrintedPartTotalsWithUsage(excludeAssemblyId);
+            const t = totals[selected.part] || { blackPrinted: 0, whitePrinted: 0, blackDamaged: 0, whiteDamaged: 0 };
+            const printed = selected.color === 'black' ? Number(t.blackPrinted || 0) : Number(t.whitePrinted || 0);
+            const damaged = selected.color === 'black' ? Number(t.blackDamaged || 0) : Number(t.whiteDamaged || 0);
+            const used = usage[selected.key] || 0;
+            const available = printed - damaged - used;
+            if (quantity > available) {
+                const colorLabel = selected.color.charAt(0).toUpperCase() + selected.color.slice(1);
+                showModal('Error', `Not enough "${selected.part} — ${colorLabel}" available for assembly. Available: ${Math.max(0, available)}, requested: ${quantity}.`);
+                return false;
+            }
+            return true;
+        }
+
         async function produceAssembly() {
             const productId = document.getElementById('assemblyProductInput').value;
             const productName = document.getElementById('assemblyProductInput').selectedOptions[0]?.textContent || '';
             const quantity = parseInt(document.getElementById('assemblyQuantityInput').value) || 1;
+            const printedPart = document.getElementById('assemblyPrintedPartInput').value;
             const assemblyId = document.getElementById('assemblyIdInput').value || 'ASM-' + Date.now();
 
+            if (!printedPart) { showModal('Error', 'Select a printed part'); return; }
             if (!productId) { showModal('Error', 'Select a product'); return; }
             if (quantity <= 0) { showModal('Error', 'Enter a valid quantity'); return; }
+            if (!await validatePrintedPartUsage(printedPart, quantity)) return;
 
             let allAvailable = true;
             let missing = [];
@@ -4943,6 +5193,7 @@
 
                 const assemblyRecord = {
                     id: assemblyId,
+                    printedPart: printedPart,
                     product: productName,
                     quantity: quantity,
                     assembler: document.getElementById('assemblyAssemblerInput').value || 'Unknown',
@@ -4978,7 +5229,10 @@
         function clearWorkflowForm(type) {
             if (type === 'assembly') {
                 document.getElementById('assemblyIdInput').value = '';
+                document.getElementById('assemblyPrintedPartInput').value = '';
+                document.getElementById('assemblyPrintedPartStockLabel').textContent = '';
                 document.getElementById('assemblyProductInput').value = '';
+                document.getElementById('assemblyProductInput').dataset.selectedValue = '';
                 document.getElementById('assemblyQuantityInput').value = 1;
                 document.getElementById('assemblyAssemblerInput').value = '';
                 document.getElementById('assemblyStartDateInput').value = '';
@@ -4997,17 +5251,25 @@
 
         async function saveWorkflow(type) {
             if (type !== 'assembly') return;
+            const printedPart = document.getElementById('assemblyPrintedPartInput').value;
+            const product = document.getElementById('assemblyProductInput').selectedOptions[0]?.textContent || '';
+            const quantity = parseInt(document.getElementById('assemblyQuantityInput').value) || 1;
+            if (!printedPart) { showModal('Error', 'Select a printed part'); return; }
+            if (!product) { showModal('Error', 'Select a product / toy'); return; }
+            if (quantity <= 0) { showModal('Error', 'Enter a valid quantity'); return; }
+            const id = document.getElementById('assemblyIdInput').value.trim() || 'ASM-' + Date.now();
+            if (!await validatePrintedPartUsage(printedPart, quantity, null)) return;
             const record = {
-                id: document.getElementById('assemblyIdInput').value.trim(),
-                product: document.getElementById('assemblyProductInput').selectedOptions[0]?.textContent || '',
-                quantity: parseInt(document.getElementById('assemblyQuantityInput').value) || 1,
+                id: id,
+                printedPart: printedPart,
+                product: product,
+                quantity: quantity,
                 assembler: document.getElementById('assemblyAssemblerInput').value.trim(),
                 startDate: document.getElementById('assemblyStartDateInput').value,
                 completionDate: document.getElementById('assemblyCompletionDateInput').value,
                 status: document.getElementById('assemblyStatusInput').value,
                 componentsUsed: currentBOMRequirements
             };
-            if (!record.id) { showModal('Error', 'Enter an Assembly ID'); return; }
             try {
                 const database = window.firebaseDatabase;
                 if (!database) throw new Error('Firebase database not initialized');
@@ -5025,10 +5287,18 @@
             if (type !== 'assembly') return;
             const id = selectedWorkflow[type] || document.getElementById('assemblyIdInput').value.trim();
             if (!id) { showModal('Error', 'Select a record to update'); return; }
+            const printedPart = document.getElementById('assemblyPrintedPartInput').value;
+            const product = document.getElementById('assemblyProductInput').selectedOptions[0]?.textContent || '';
+            const quantity = parseInt(document.getElementById('assemblyQuantityInput').value) || 1;
+            if (!printedPart) { showModal('Error', 'Select a printed part'); return; }
+            if (!product) { showModal('Error', 'Select a product / toy'); return; }
+            if (quantity <= 0) { showModal('Error', 'Enter a valid quantity'); return; }
+            if (!await validatePrintedPartUsage(printedPart, quantity, id)) return;
             const record = {
                 id: id,
-                product: document.getElementById('assemblyProductInput').selectedOptions[0]?.textContent || '',
-                quantity: parseInt(document.getElementById('assemblyQuantityInput').value) || 1,
+                printedPart: printedPart,
+                product: product,
+                quantity: quantity,
                 assembler: document.getElementById('assemblyAssemblerInput').value.trim(),
                 startDate: document.getElementById('assemblyStartDateInput').value,
                 completionDate: document.getElementById('assemblyCompletionDateInput').value,
@@ -5228,7 +5498,7 @@
         // FILAMENT PORTAL
         // ============================================================
 
-        const PRINTED_PARTS = [
+        let PRINTED_PARTS = [
             'Bottoms', 'Lid arms', 'Lid Arm Servo Mount', 'Lid', 'Lid LED Cover',
             'Octo Arm', 'Octo Arm Servo Mount', 'Toggle Switch Panel', 'Toggle Switch Panel Cover',
             'L Bracket', 'Octo Head Support', 'Name Plates', 'Power Input Plates', 'Lid LED Cap'
@@ -5337,6 +5607,22 @@
                 whiteUsed: Number(record?.whiteFilamentUsed || 0) };
         }
 
+        function partBreakdownHTML(parts) {
+            if (!parts) return '<span style="color:var(--text-secondary);">—</span>';
+            const rows = Object.entries(parts).filter(([, p]) =>
+                Number(p?.blackPrinted || 0) + Number(p?.whitePrinted || 0) +
+                Number(p?.blackDamaged || 0) + Number(p?.whiteDamaged || 0) > 0);
+            if (!rows.length) return '<span style="color:var(--text-secondary);">—</span>';
+            return `<div style="display:flex;flex-direction:column;gap:4px;">${rows.map(([name, p]) => {
+                const segs = [];
+                if (Number(p.blackPrinted || 0) > 0) segs.push(`Black ${p.blackPrinted}`);
+                if (Number(p.blackDamaged || 0) > 0) segs.push(`Black dmg ${p.blackDamaged}`);
+                if (Number(p.whitePrinted || 0) > 0) segs.push(`White ${p.whitePrinted}`);
+                if (Number(p.whiteDamaged || 0) > 0) segs.push(`White dmg ${p.whiteDamaged}`);
+                return `<div><strong>${name}</strong>: ${segs.join(', ')}</div>`;
+            }).join('')}</div>`;
+        }
+
         async function loadTodayPrintingData() {
             const database = window.firebaseDatabase;
             if (!database) throw new Error('Firebase database not initialized');
@@ -5347,13 +5633,13 @@
             const body = document.getElementById('todayPrintingHistoryBody');
             let totals = { blackPrinted: 0, whitePrinted: 0, blackDamaged: 0, whiteDamaged: 0, blackUsed: 0, whiteUsed: 0 };
             if (!entries.length) {
-                body.innerHTML = '<tr><td colspan="7" class="loading"><p>No printing recorded today</p></td></tr>';
+                body.innerHTML = '<tr><td colspan="8" class="loading"><p>No printing recorded today</p></td></tr>';
             } else {
                 body.innerHTML = entries.map(([id, r]) => {
                     const t = dailyTotals(r);
                     Object.keys(totals).forEach(k => totals[k] += t[k]);
                     const time = new Date(r.timestamp || `${r.date}T00:00:00`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    return `<tr><td>${time}</td><td>${t.blackPrinted}</td><td>${t.whitePrinted}</td>
+                    return `<tr><td>${time}</td><td>${partBreakdownHTML(r.parts)}</td><td>${t.blackPrinted}</td><td>${t.whitePrinted}</td>
                         <td>${t.blackDamaged}</td><td>${t.whiteDamaged}</td>
                         <td>${t.blackUsed.toFixed(1)} g</td><td>${t.whiteUsed.toFixed(1)} g</td></tr>`;
                 }).join('');
@@ -5411,6 +5697,9 @@
                 clearDailyPrintingForm();
                 await loadTodayPrintingData();
                 await refreshPrintRoomFilamentStock();
+                if (document.getElementById('productComponentsManagementPortal')?.style.display !== 'none') {
+                    await loadProductComponentsData();
+                }
             } catch (e) {
                 showModal('Error', e.message);
                 console.error(e);
@@ -5427,6 +5716,7 @@
             document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
             document.querySelectorAll('.menu-item')[6].classList.add('active');
             closeSidebar();
+            await syncPrintedPartsMaster();
             buildPrintPartRows();
             const date = document.getElementById('filamentPrintDateInput');
             if (date) date.value = localDateISO();
