@@ -2403,7 +2403,8 @@
                                     <th>Section</th>
                                     <th>Category</th>
                                     <th>Sub Category</th>
-                                    <th>Quantity</th>
+                                    <th>Previous Quantity</th>
+                                    <th>Current Quantity</th>
                                     <th>Supplier</th>
                                     <th>Reorder Level</th>
                                     <th>Location</th>
@@ -2413,7 +2414,7 @@
                             </thead>
                             <tbody id="componentsTableBody">
                                 <tr>
-                                    <td colspan="11" class="loading">
+                                    <td colspan="12" class="loading">
                                         <div class="spinner"></div>
                                         <p>Loading component data...</p>
                                     </td>
@@ -2819,14 +2820,14 @@
                     <div class="insight-card">
                         <div class="form-header"><i class="fas fa-boxes-stacked"></i><span>Octopus Packaging Raw — Remaining</span></div>
                         <div class="table-container"><div class="table-wrapper"><table class="employee-table">
-                            <thead><tr><th>Item</th><th>Quantity Remaining</th><th>Location</th></tr></thead>
+                            <thead><tr><th>Item</th><th>Previous Quantity</th><th>Current Quantity</th><th>Location</th></tr></thead>
                             <tbody id="packagingRawTableBody"></tbody>
                         </table></div></div>
                     </div>
                     <div class="insight-card">
                         <div class="form-header"><i class="fas fa-box"></i><span>Octopus Packaging Prepared — Assembled</span></div>
                         <div class="table-container"><div class="table-wrapper"><table class="employee-table">
-                            <thead><tr><th>Prepared Item</th><th>Quantity Assembled</th><th>Location</th></tr></thead>
+                            <thead><tr><th>Prepared Item</th><th>Previous Quantity</th><th>Current Quantity</th><th>Location</th></tr></thead>
                             <tbody id="packagingPreparedTableBody"></tbody>
                         </table></div></div>
                     </div>
@@ -4032,6 +4033,40 @@
         // COMPONENTS PORTAL
         // ============================================================
 
+        // ---- Quantity history helpers (shared by Components, Assembly,
+        //      Packaging and Filament portals). Every place that changes
+        //      component_data quantity calls stampQuantityHistory() so the
+        //      value that was live *before* the change is kept in
+        //      previousQuantity, next to the new live quantity. ----
+        function quantityToNumber(v) {
+            if (v === undefined || v === null || v === '') return 0;
+            return parseFloat(v);
+        }
+
+        function stampQuantityHistory(updates, id, oldQty, newQty) {
+            const o = quantityToNumber(oldQty);
+            const n = quantityToNumber(newQty);
+            // Only record real changes, so re-saving an item without touching
+            // its quantity does not overwrite the last known previous value.
+            if (!Number.isFinite(o) || !Number.isFinite(n) || o === n) return;
+            updates[`component_data/${id}/previousQuantity`] = o;
+            updates[`component_data/${id}/quantityUpdatedAt`] = new Date().toISOString();
+        }
+
+        function previousQuantityCellHTML(c) {
+            const prev = c ? c.previousQuantity : undefined;
+            const muted = 'color: var(--text-secondary);';
+            if (prev === undefined || prev === null || prev === '') {
+                return `<td style="${muted}" title="No quantity change recorded yet">&mdash;</td>`;
+            }
+            let tip = 'Quantity before the last change';
+            if (c.quantityUpdatedAt) {
+                const d = new Date(c.quantityUpdatedAt);
+                if (!isNaN(d.getTime())) tip += ` (changed ${d.toLocaleString('en-GB')})`;
+            }
+            return `<td style="${muted}" title="${escapeHTML(tip)}">${escapeHTML(prev)}</td>`;
+        }
+
         const COMPONENT_PORTAL_SECTIONS = new Set(['production', 'packaging', 'print room', 'assembly']);
 
         function isComponentPortalAllowed(component) {
@@ -4067,16 +4102,16 @@
             else if (qty <= reorder) { statusBadge = '<span style="color: var(--warning);">Low Stock</span>'; rowStyle = 'background-color: rgba(255, 199, 95, 0.08);'; }
             const ds = c.datasheet ? `<a href="${c.datasheet}" target="_blank" style="color:var(--accent);">Link</a>` : '';
             return { rowStyle, html: `<td>${id}</td><td>${c.name||''}</td><td>${c.section||''}</td>
-                <td>${c.category||''}</td><td>${c.subCategory||''}</td><td>${qty}</td>
+                <td>${c.category||''}</td><td>${c.subCategory||''}</td>${previousQuantityCellHTML(c)}<td>${qty}</td>
                 <td>${c.supplier||''}</td><td>${c.reorderLevel||''}</td><td>${c.location||''}</td><td>${ds}</td><td>${statusBadge}</td>` };
         }
 
         async function loadComponentData() {
             const tbody = document.getElementById('componentsTableBody');
-            tbody.innerHTML = '<tr><td colspan="11" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
             try {
                 const data = await fetchComponentData();
-                if (!data) { tbody.innerHTML = '<tr><td colspan="11" class="loading"><p>No data</p></td></tr>'; return; }
+                if (!data) { tbody.innerHTML = '<tr><td colspan="12" class="loading"><p>No data</p></td></tr>'; return; }
                 tbody.innerHTML = '';
                 const entries = Array.isArray(data) ? data.map((c,i) => [i,c]).filter(([,c])=>c) : Object.entries(data);
                 entries.forEach(([id,c]) => {
@@ -4088,7 +4123,7 @@
                     row.innerHTML = html;
                     tbody.appendChild(row);
                 });
-            } catch (e) { tbody.innerHTML = '<tr><td colspan="11" class="loading"><p>Error loading</p></td></tr>'; }
+            } catch (e) { tbody.innerHTML = '<tr><td colspan="12" class="loading"><p>Error loading</p></td></tr>'; }
         }
 
         function selectComponentRow(row, id, c) {
@@ -4251,8 +4286,14 @@
             try {
                 const database = window.firebaseDatabase;
                 if (!database) throw new Error('Firebase database not initialized');
-                const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
-                await update(ref(database, `component_data/${id}`), data);
+                const { ref, get, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                const existingSnap = await get(ref(database, `component_data/${id}`));
+                const updates = {};
+                Object.entries(data).forEach(([k, v]) => { updates[`component_data/${id}/${k}`] = v; });
+                if (existingSnap.exists()) {
+                    stampQuantityHistory(updates, id, existingSnap.val().quantity, data.quantity);
+                }
+                await update(ref(database), updates);
                 showModal('Success', 'Component updated');
 
                 // Reload the table, then restore the selection to the component
@@ -4308,7 +4349,7 @@
                     found = true;
                 }
             });
-            if (!found) tbody.innerHTML = '<tr><td colspan="11" class="loading"><p>No matches</p></td></tr>';
+            if (!found) tbody.innerHTML = '<tr><td colspan="12" class="loading"><p>No matches</p></td></tr>';
         }
 
         function showAllComponents() {
@@ -5185,7 +5226,9 @@
                         }
                     }
                     if (compId) {
-                        updates[`component_data/${compId}/quantity`] = Math.max(0, currentStock - req.required);
+                        const newStock = Math.max(0, currentStock - req.required);
+                        updates[`component_data/${compId}/quantity`] = newStock;
+                        stampQuantityHistory(updates, compId, currentStock, newStock);
                     } else {
                         console.warn(`Could not find component: ${req.name}`);
                     }
@@ -5210,6 +5253,7 @@
                     if (c && c.name === productName) {
                         const currentQty = parseFloat(c.quantity) || 0;
                         updates[`component_data/${id}/quantity`] = currentQty + quantity;
+                        stampQuantityHistory(updates, id, currentQty, currentQty + quantity);
                         break;
                     }
                 }
@@ -5384,16 +5428,16 @@
             const preparedBody = document.getElementById('packagingPreparedTableBody');
             const rawSelect = document.getElementById('packagingRawSelect');
             const preparedSelect = document.getElementById('packagingPreparedSelect');
-            rawBody.innerHTML = '<tr><td colspan="3" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
-            preparedBody.innerHTML = '<tr><td colspan="3" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
+            rawBody.innerHTML = '<tr><td colspan="4" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
+            preparedBody.innerHTML = '<tr><td colspan="4" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
             try {
                 const { raw, prepared } = await getPackagingComponents();
                 rawBody.innerHTML = raw.length ? raw.map(([id,c]) => 
-                    `<tr><td>${c.name || id}</td><td>${c.quantity ?? 0}</td><td>${c.location || ''}</td></tr>`
-                ).join('') : '<tr><td colspan="3" class="loading"><p>No Packaging Raw items</p></td></tr>';
+                    `<tr><td>${c.name || id}</td>${previousQuantityCellHTML(c)}<td>${c.quantity ?? 0}</td><td>${c.location || ''}</td></tr>`
+                ).join('') : '<tr><td colspan="4" class="loading"><p>No Packaging Raw items</p></td></tr>';
                 preparedBody.innerHTML = prepared.length ? prepared.map(([id,c]) => 
-                    `<tr><td>${c.name || id}</td><td>${c.quantity ?? 0}</td><td>${c.location || ''}</td></tr>`
-                ).join('') : '<tr><td colspan="3" class="loading"><p>No Packaging Prepared items</p></td></tr>';
+                    `<tr><td>${c.name || id}</td>${previousQuantityCellHTML(c)}<td>${c.quantity ?? 0}</td><td>${c.location || ''}</td></tr>`
+                ).join('') : '<tr><td colspan="4" class="loading"><p>No Packaging Prepared items</p></td></tr>';
                 rawSelect.innerHTML = '<option value="">Select Raw Material</option>' + raw.map(([id,c]) => 
                     `<option value="${id}">${c.name || id} — ${c.quantity ?? 0} remaining</option>`
                 ).join('');
@@ -5401,8 +5445,8 @@
                     `<option value="${id}">${c.name || id} — ${c.quantity ?? 0} assembled</option>`
                 ).join('');
             } catch (e) {
-                rawBody.innerHTML = '<tr><td colspan="3" class="loading"><p>Error loading</p></td></tr>';
-                preparedBody.innerHTML = '<tr><td colspan="3" class="loading"><p>Error loading</p></td></tr>';
+                rawBody.innerHTML = '<tr><td colspan="4" class="loading"><p>Error loading</p></td></tr>';
+                preparedBody.innerHTML = '<tr><td colspan="4" class="loading"><p>Error loading</p></td></tr>';
                 console.error(e);
             }
         }
@@ -5465,11 +5509,13 @@
                     if (!Number.isFinite(current)) throw new Error(`Raw item "${c?.name || item.id}" has non-numeric quantity`);
                     if (item.quantity > current) throw new Error(`Not enough "${c?.name || item.id}". Remaining: ${current}, required: ${item.quantity}`);
                     updates[`component_data/${item.id}/quantity`] = current - item.quantity;
+                    stampQuantityHistory(updates, item.id, current, current - item.quantity);
                 }
                 const prepared = data[preparedId];
                 const prepCurrent = Number(prepared?.quantity);
                 if (!Number.isFinite(prepCurrent)) throw new Error(`Prepared item has non-numeric quantity`);
                 updates[`component_data/${preparedId}/quantity`] = prepCurrent + produced;
+                stampQuantityHistory(updates, preparedId, prepCurrent, prepCurrent + produced);
                 const logId = push(ref(database, 'packaging_preparation_log')).key;
                 updates[`packaging_preparation_log/${logId}`] = {
                     preparedItemId: preparedId,
@@ -5684,6 +5730,7 @@
                     if (!Number.isFinite(current)) throw new Error(`${color} PLA quantity is not numeric`);
                     if (amount > current) throw new Error(`${color} PLA stock insufficient. Remaining: ${current} g`);
                     updates[`component_data/${id}/quantity`] = current - amount;
+                    stampQuantityHistory(updates, id, current, current - amount);
                 }
 
                 const logRef = push(ref(database, 'filament_printing_daily_data'));
