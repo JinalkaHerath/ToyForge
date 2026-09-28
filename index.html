@@ -1902,15 +1902,7 @@
                 </div>
 
                 <div class="search-section">
-                    <select class="search-select" id="searchOption">
-                        <option value="Search">Search By</option>
-                        <option value="Id">Employee ID</option>
-                        <option value="Name">Name</option>
-                        <option value="Email">Email</option>
-                        <option value="Employment_type">Employment Type</option>
-                        <option value="RFID">RFID</option>
-                    </select>
-                    <input type="text" class="search-input" id="searchValue" placeholder="Enter search value">
+                    <input type="text" class="search-input" id="searchValue" placeholder="Search any field...">
                     <button class="search-button" onclick="searchEmployee()">
                         <i class="fas fa-search"></i>
                         <span>Search</span>
@@ -2101,13 +2093,7 @@
 
                 <div class="search-analytics-section">
                     <div class="search-container">
-                        <select id="supplierSearchOption" class="search-select">
-                            <option value="Search">Search</option>
-                            <option value="Receipt ID">Receipt ID</option>
-                            <option value="Component Name">Component Name</option>
-                            <option value="Supplier Name">Supplier Name</option>
-                        </select>
-                        <input type="text" id="supplierSearchValue" class="search-input" placeholder="Enter search value">
+                        <input type="text" id="supplierSearchValue" class="search-input" placeholder="Search any field...">
                         <button class="search-btn" onclick="searchSupplier()">
                             <i class="fas fa-search"></i>
                             Search
@@ -2234,13 +2220,7 @@
                 </div>
 
                 <div class="search-section">
-                    <select class="search-select" id="categorySearchOption">
-                        <option value="Search">Search By</option>
-                        <option value="Category Id">Category ID</option>
-                        <option value="Category Name">Category Name</option>
-                        <option value="Section">Section</option>
-                    </select>
-                    <input type="text" class="search-input" id="categorySearchValue" placeholder="Enter search value">
+                    <input type="text" class="search-input" id="categorySearchValue" placeholder="Search any field...">
                     <button class="search-button" onclick="searchCategory()">
                         <i class="fas fa-search"></i>
                         <span>Search</span>
@@ -2369,15 +2349,7 @@
 
                 <div class="search-analytics-section">
                     <div class="search-container">
-                        <select id="componentSearchOption" class="search-select">
-                            <option value="Search">Search</option>
-                            <option value="Component ID">Component ID</option>
-                            <option value="Component Name">Component Name</option>
-                            <option value="Section">Section</option>
-                            <option value="Category">Category</option>
-                            <option value="Sub Category">Sub Category</option>
-                        </select>
-                        <input type="text" id="componentSearchValue" class="search-input" placeholder="Enter search value">
+                        <input type="text" id="componentSearchValue" class="search-input" placeholder="Search any field...">
                         <button class="search-btn" onclick="searchComponent()">
                             <i class="fas fa-search"></i>
                             Search
@@ -2525,7 +2497,7 @@
                         <span>Quantity Edit History</span>
                     </div>
                     <div class="search-container" style="margin-bottom: 12px;">
-                        <input type="text" id="componentHistorySearch" class="search-input" placeholder="Filter by component ID or name" oninput="renderComponentHistory()">
+                        <input type="text" id="componentHistorySearch" class="search-input" placeholder="Search any history field..." oninput="renderComponentHistory()">
                         <button class="show-all-btn" onclick="showAllComponentHistory()">
                             <i class="fas fa-list"></i>
                             Show All
@@ -2705,14 +2677,7 @@
                 <!-- Search Section -->
                 <div class="search-analytics-section">
                     <div class="search-container">
-                        <select id="assemblySearchOption" class="search-select">
-                            <option value="all">All Fields</option>
-                            <option value="printedPart">Printed Part</option>
-                            <option value="product">Product</option>
-                            <option value="assembler">Assembler</option>
-                            <option value="status">Status</option>
-                        </select>
-                        <input id="assemblySearchValue" class="search-input" placeholder="Search assembly records">
+                        <input id="assemblySearchValue" class="search-input" placeholder="Search any field...">
                         <button class="search-btn" onclick="searchWorkflow('assembly')">
                             <i class="fas fa-search"></i> Search
                         </button>
@@ -3004,15 +2969,7 @@
 
                 <div class="search-analytics-section">
                     <div class="search-container">
-                        <select id="rdComponentSearchOption" class="search-select">
-                            <option value="Search">Search</option>
-                            <option value="Component ID">Component ID</option>
-                            <option value="Component Name">Component Name</option>
-                            <option value="Section">Section</option>
-                            <option value="Category">Category</option>
-                            <option value="Sub Category">Sub Category</option>
-                        </select>
-                        <input type="text" id="rdComponentSearchValue" class="search-input" placeholder="Search R&amp;D components">
+                        <input type="text" id="rdComponentSearchValue" class="search-input" placeholder="Search any field...">
                         <button class="search-btn" onclick="searchRDComponent()"><i class="fas fa-search"></i> Search</button>
                         <button class="show-all-btn" onclick="showAllRDComponents()"><i class="fas fa-list"></i> Show All</button>
                         <button class="show-all-btn" onclick="syncRDComponentsFromSpreadsheet()" style="background-color: var(--info);"><i class="fas fa-file-import"></i> Sync R&amp;D Components from Spreadsheet</button>
@@ -3273,7 +3230,7 @@
 
         const workflowConfigs = {
             assembly: { node: 'assembly_data', portalId: 'assemblyManagementPortal', tableId: 'assemblyTableBody', 
-                searchOption: 'assemblySearchOption', searchInput: 'assemblySearchValue', 
+                searchInput: 'assemblySearchValue', 
                 fields: ['id','printedPart','product','quantity','assembler','startDate','completionDate','status'], 
                 labels: ['Record ID','Printed Part','Product / Toy','Quantity','Assembler','Start Date','Completion Date','Status'] }
         };
@@ -3481,14 +3438,9 @@
         }
 
         function searchEmployee() {
-            const option = document.getElementById('searchOption').value;
-            const value = document.getElementById('searchValue').value.toLowerCase();
-            if (option === 'Search' || !value.trim()) { showModal('Error', 'Please select a search option and enter a value'); return; }
-            const filtered = employees.filter(emp => {
-                const map = { 'Id': emp.empid, 'Name': emp.name, 'Email': emp.email, 
-                    'Employment_type': emp.employment_type, 'RFID': emp.rfid };
-                return String(map[option] || '').toLowerCase().includes(value);
-            });
+            const value = document.getElementById('searchValue').value.trim().toLowerCase();
+            if (!value) { showModal('Error', 'Please enter a search value'); return; }
+            const filtered = employees.filter(emp => Object.values(emp || {}).some(v => String(v ?? '').toLowerCase().includes(value)));
             if (filtered.length === 0) { showModal('Info', 'No matching records found'); return; }
             const tbody = document.getElementById('employeeTableBody');
             tbody.innerHTML = '';
@@ -3508,7 +3460,6 @@
         }
 
         function showAllEmployees() {
-            document.getElementById('searchOption').value = 'Search';
             document.getElementById('searchValue').value = '';
             refreshEmployeeTable();
         }
@@ -3715,9 +3666,8 @@
         }
 
         async function searchSupplier() {
-            const option = document.getElementById('supplierSearchOption').value;
-            const value = document.getElementById('supplierSearchValue').value.trim();
-            if (option === 'Search' || !value) { showModal('Error', 'Invalid search'); return; }
+            const value = document.getElementById('supplierSearchValue').value.trim().toLowerCase();
+            if (!value) { showModal('Error', 'Please enter a search value'); return; }
             const data = await fetchSupplierData();
             if (!data) { showModal('Info', 'No data'); return; }
             const tbody = document.getElementById('supplierManagementTableBody');
@@ -3725,11 +3675,8 @@
             let found = false;
             const entries = Array.isArray(data) ? data.map((s,i) => [i,s]).filter(([,s])=>s) : Object.entries(data);
             entries.forEach(([id, s]) => {
-                let match = false;
-                if (option === 'Receipt ID') match = String(id) === value;
-                else if (option === 'Component Name') match = s.name === value;
-                else if (option === 'Supplier Name') match = s.supplier === value;
-                if (match) {
+                const searchable = [id, ...Object.values(s || {})].map(v => String(v ?? '').toLowerCase()).join(' ');
+                if (searchable.includes(value)) {
                     const row = document.createElement('tr');
                     row.onclick = () => selectSupplierRow(row, id, s);
                     row.innerHTML = `<td>${id}</td><td>${s.name||''}</td><td>${s.category||''}</td>
@@ -3744,7 +3691,6 @@
 
         function showAllSuppliers() {
             document.getElementById('supplierSearchValue').value = '';
-            document.getElementById('supplierSearchOption').value = 'Search';
             loadSupplierManagementData();
         }
 
@@ -3952,9 +3898,8 @@
         }
 
         async function searchCategory() {
-            const option = document.getElementById('categorySearchOption').value;
-            const value = document.getElementById('categorySearchValue').value.trim();
-            if (option === 'Search' || !value) { showModal('Error', 'Invalid search'); return; }
+            const value = document.getElementById('categorySearchValue').value.trim().toLowerCase();
+            if (!value) { showModal('Error', 'Please enter a search value'); return; }
             const tbody = document.getElementById('categoryTableBody');
             tbody.innerHTML = '<tr><td colspan="5" class="loading"><div class="spinner"></div><p>Searching...</p></td></tr>';
             try {
@@ -3970,18 +3915,14 @@
                 const data = snap.val();
                 const entries = Array.isArray(data) ? data.map((c,i) => [i,c]).filter(([,c])=>c) : Object.entries(data);
                 entries.forEach(([id, cat]) => {
-                    let match = false;
-                    if (option === 'Category Id') match = String(id) === value;
-                    else if (option === 'Category Name') match = cat.name === value;
-                    else if (option === 'Section') match = cat.section === value;
-                    if (match) {
+                    const subNames = getSubCategoryNames(subData, cat.name).join(', ');
+                    const searchable = [id, cat.section, cat.name, subNames, cat.description].map(v => String(v ?? '').toLowerCase()).join(' ');
+                    if (searchable.includes(value)) {
                         const row = document.createElement('tr');
                         row.onclick = () => selectCategoryRow(row, id, cat);
                         row.innerHTML = `
                             <td>${id}</td><td>${cat.section||''}</td><td>${cat.name||''}</td>
-                            <td>${getSubCategoryNames(subData, cat.name).join(', ')}</td>
-                            <td>${cat.description||''}</td>
-                        `;
+                            <td>${subNames}</td><td>${cat.description||''}</td>`;
                         tbody.appendChild(row);
                         found = true;
                     }
@@ -3991,7 +3932,6 @@
         }
 
         function showAllCategories() {
-            document.getElementById('categorySearchOption').value = 'Search';
             document.getElementById('categorySearchValue').value = '';
             loadCategoryData();
         }
@@ -4151,7 +4091,7 @@
             const text = (document.getElementById('componentHistorySearch').value || '').trim().toLowerCase();
             let entries = buildComponentHistoryEntries(componentHistoryData);
             if (componentHistoryFilterId !== null) entries = entries.filter(e => e.id === String(componentHistoryFilterId));
-            if (text) entries = entries.filter(e => e.id.toLowerCase().includes(text) || e.name.toLowerCase().includes(text));
+            if (text) entries = entries.filter(e => Object.values(e || {}).some(v => String(v ?? '').toLowerCase().includes(text)));
 
             const total = entries.length;
             const shown = entries.slice(0, COMPONENT_HISTORY_LIMIT);
@@ -4493,9 +4433,8 @@
         }
 
         async function searchComponent() {
-            const option = document.getElementById('componentSearchOption').value;
-            const value = document.getElementById('componentSearchValue').value.trim();
-            if (option === 'Search' || !value) { showModal('Error', 'Invalid search'); return; }
+            const value = document.getElementById('componentSearchValue').value.trim().toLowerCase();
+            if (!value) { showModal('Error', 'Please enter a search value'); return; }
             const data = await fetchComponentData();
             if (!data) { showModal('Info', 'No data'); return; }
             const tbody = document.getElementById('componentsTableBody');
@@ -4503,11 +4442,8 @@
             let found = false;
             const entries = Array.isArray(data) ? data.map((c,i) => [i,c]).filter(([,c])=>c) : Object.entries(data);
             entries.forEach(([id,c]) => {
-                let match = false;
-                const map = { 'Component ID': id, 'Component Name': c.name, 'Section': c.section, 
-                    'Category': c.category, 'Sub Category': c.subCategory };
-                if (String(map[option] || '').toLowerCase().includes(value)) match = true;
-                if (match) {
+                const searchable = [id, ...Object.values(c || {})].map(v => String(v ?? '').toLowerCase()).join(' ');
+                if (searchable.includes(value)) {
                     const { rowStyle, html } = componentRowHTML(id, c);
                     const row = document.createElement('tr');
                     row.dataset.componentId = id;
@@ -4522,7 +4458,6 @@
         }
 
         function showAllComponents() {
-            document.getElementById('componentSearchOption').value = 'Search';
             document.getElementById('componentSearchValue').value = '';
             loadComponentData();
         }
@@ -5549,14 +5484,11 @@
             if (type !== 'assembly') return;
             const c = workflowConfigs[type];
             const q = document.getElementById(c.searchInput).value.trim().toLowerCase();
-            const field = document.getElementById(c.searchOption).value;
             if (!q) { await loadWorkflowData(type); return; }
             const entries = workflowEntries(await getWorkflowData(type));
-            const filtered = entries.filter(([id, r]) => {
-                if (field === 'id') return id.toLowerCase().includes(q);
-                if (field === 'all') return [id, ...Object.values(r || {})].some(v => String(v || '').toLowerCase().includes(q));
-                return String(r?.[field] || '').toLowerCase().includes(q);
-            });
+            const filtered = entries.filter(([id, r]) =>
+                [id, ...Object.values(r || {})].some(v => String(v ?? '').toLowerCase().includes(q))
+            );
             await loadWorkflowData(type, filtered);
         }
 
@@ -6179,21 +6111,17 @@
         }
 
         async function searchRDComponent() {
-            const option = document.getElementById('rdComponentSearchOption').value;
             const q = document.getElementById('rdComponentSearchValue').value.trim().toLowerCase();
-            if (option === 'Search' || !q) { showModal('Error', 'Invalid search'); return; }
+            if (!q) { showModal('Error', 'Please enter a search value'); return; }
             const data = await getRDComponentData();
             const entries = rdComponentEntries(data).filter(([,c]) => String(c?.section || 'R&D').toLowerCase() === 'r&d');
-            const filtered = entries.filter(([id,c]) => {
-                const map = { 'Component ID': id, 'Component Name': c.name, 'Section': c.section,
-                    'Category': c.category, 'Sub Category': c.subCategory };
-                return String(map[option] || '').toLowerCase().includes(q);
-            });
+            const filtered = entries.filter(([id,c]) =>
+                [id, ...Object.values(c || {})].some(v => String(v ?? '').toLowerCase().includes(q))
+            );
             await loadRDComponentData(filtered);
         }
 
         function showAllRDComponents() {
-            document.getElementById('rdComponentSearchOption').value = 'Search';
             document.getElementById('rdComponentSearchValue').value = '';
             loadRDComponentData();
         }
