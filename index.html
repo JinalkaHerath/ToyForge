@@ -2405,6 +2405,8 @@
                                     <th>Sub Category</th>
                                     <th>Previous Quantity</th>
                                     <th>Current Quantity</th>
+                                    <th>Last Updated</th>
+                                    <th>Ordered Quantity</th>
                                     <th>Supplier</th>
                                     <th>Reorder Level</th>
                                     <th>Location</th>
@@ -2414,7 +2416,7 @@
                             </thead>
                             <tbody id="componentsTableBody">
                                 <tr>
-                                    <td colspan="12" class="loading">
+                                    <td colspan="14" class="loading">
                                         <div class="spinner"></div>
                                         <p>Loading component data...</p>
                                     </td>
@@ -2468,6 +2470,10 @@
                                 <input type="number" id="componentQuantityInput" class="form-input">
                             </div>
                             <div class="form-group">
+                                <label for="componentOrderedQuantityInput">Ordered Quantity (on order, not yet received)</label>
+                                <input type="number" id="componentOrderedQuantityInput" class="form-input" min="0" placeholder="0">
+                            </div>
+                            <div class="form-group">
                                 <label for="componentSupplierInput">Supplier</label>
                                 <select id="componentSupplierInput" class="form-select">
                                     <option value="">Select Supplier</option>
@@ -2506,6 +2512,44 @@
                             <i class="fas fa-broom"></i>
                             Clear
                         </button>
+                        <button class="action-btn" style="background-color: var(--info);" onclick="showComponentHistory(selectedComponentId)">
+                            <i class="fas fa-clock-rotate-left"></i>
+                            Check Edit History
+                        </button>
+                    </div>
+                </div>
+
+                <div class="supplier-form-section" id="componentHistorySection">
+                    <div class="form-header">
+                        <i class="fas fa-clock-rotate-left"></i>
+                        <span>Quantity Edit History</span>
+                    </div>
+                    <div class="search-container" style="margin-bottom: 12px;">
+                        <input type="text" id="componentHistorySearch" class="search-input" placeholder="Filter by component ID or name" oninput="renderComponentHistory()">
+                        <button class="show-all-btn" onclick="showAllComponentHistory()">
+                            <i class="fas fa-list"></i>
+                            Show All
+                        </button>
+                    </div>
+                    <p id="componentHistoryInfo" style="color: var(--text-secondary); font-size: 13px; margin-bottom: 10px;"></p>
+                    <div class="table-container">
+                        <div class="table-wrapper" style="max-height: 420px; overflow: auto;">
+                            <table class="employee-table" style="min-width: 0;">
+                                <thead>
+                                    <tr>
+                                        <th>Date &amp; Time</th>
+                                        <th>Component ID</th>
+                                        <th>Name</th>
+                                        <th>Previous Qty</th>
+                                        <th>New Qty</th>
+                                        <th>Change</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="componentHistoryBody">
+                                    <tr><td colspan="6" class="loading"><p>Loading history...</p></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4049,8 +4093,112 @@
             // Only record real changes, so re-saving an item without touching
             // its quantity does not overwrite the last known previous value.
             if (!Number.isFinite(o) || !Number.isFinite(n) || o === n) return;
+            const at = new Date().toISOString();
             updates[`component_data/${id}/previousQuantity`] = o;
-            updates[`component_data/${id}/quantityUpdatedAt`] = new Date().toISOString();
+            updates[`component_data/${id}/quantityUpdatedAt`] = at;
+            // Full edit log (like "Show edit history" in a spreadsheet): one entry per change.
+            updates[`component_data/${id}/quantityHistory/${newHistoryKey()}`] = { from: o, to: n, at };
+        }
+
+        function newHistoryKey() {
+            return 'q' + Date.now() + Math.random().toString(36).slice(2, 6);
+        }
+
+        function formatEditDate(iso) {
+            const d = new Date(iso);
+            return isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function lastUpdatedCellHTML(id, c) {
+            const when = c && c.quantityUpdatedAt ? formatEditDate(c.quantityUpdatedAt) : '';
+            const label = when ? escapeHTML(when) : '<span style="color: var(--text-secondary);">&mdash;</span>';
+            return `<td style="white-space:nowrap;">${label} <button type="button" data-id="${escapeHTML(id)}" title="Check edit history"
+                onclick="event.stopPropagation(); showComponentHistory(this.dataset.id)"
+                style="background:none;border:none;color:var(--accent);cursor:pointer;padding:0 4px;"><i class="fas fa-clock-rotate-left"></i></button></td>`;
+        }
+
+        // ---- Edit history panel (bottom of Components portal) ----
+        // Reads the per-component quantityHistory log written by stampQuantityHistory()
+        // and lists every quantity change (date, previous, new, difference), newest first.
+        let componentHistoryData = null;
+        let componentHistoryFilterId = null;
+        const COMPONENT_HISTORY_LIMIT = 200;
+
+        function buildComponentHistoryEntries(data) {
+            const out = [];
+            const items = Array.isArray(data) ? data.map((c, i) => [i, c]).filter(([, c]) => c) : Object.entries(data || {});
+            items.forEach(([id, c]) => {
+                let list = Object.values(c.quantityHistory || {}).filter(e => e && e.at);
+                // Older records only have the last change stored (no full log yet)
+                if (!list.length && c.previousQuantity !== undefined && c.previousQuantity !== null && c.previousQuantity !== '') {
+                    list = [{ from: c.previousQuantity, to: c.quantity, at: c.quantityUpdatedAt || '' }];
+                }
+                list.forEach(e => out.push({ id: String(id), name: c.name || '', from: e.from, to: e.to, at: e.at || '' }));
+            });
+            out.sort((x, y) => String(y.at).localeCompare(String(x.at)));
+            return out;
+        }
+
+        function renderComponentHistory() {
+            const body = document.getElementById('componentHistoryBody');
+            const info = document.getElementById('componentHistoryInfo');
+            if (!body) return;
+            if (!componentHistoryData) {
+                body.innerHTML = '<tr><td colspan="6" class="loading"><p>No data</p></td></tr>';
+                info.textContent = '';
+                return;
+            }
+            const text = (document.getElementById('componentHistorySearch').value || '').trim().toLowerCase();
+            let entries = buildComponentHistoryEntries(componentHistoryData);
+            if (componentHistoryFilterId !== null) entries = entries.filter(e => e.id === String(componentHistoryFilterId));
+            if (text) entries = entries.filter(e => e.id.toLowerCase().includes(text) || e.name.toLowerCase().includes(text));
+
+            const total = entries.length;
+            const shown = entries.slice(0, COMPONENT_HISTORY_LIMIT);
+            let label = componentHistoryFilterId !== null ? `Showing history for component ${componentHistoryFilterId}. ` : '';
+            label += total > shown.length ? `Latest ${shown.length} of ${total} changes.` : `${total} change${total === 1 ? '' : 's'}.`;
+            info.textContent = label;
+
+            if (!shown.length) {
+                body.innerHTML = '<tr><td colspan="6" class="loading"><p>No quantity changes recorded yet. New changes are logged with date and time.</p></td></tr>';
+                return;
+            }
+            body.innerHTML = shown.map(e => {
+                const hasFrom = e.from !== null && e.from !== undefined && e.from !== '';
+                const diff = hasFrom ? (parseFloat(e.to) || 0) - (parseFloat(e.from) || 0) : null;
+                const diffTxt = diff === null ? 'Initial stock' : (diff > 0 ? '+' + diff : String(diff));
+                const color = diff === null ? 'var(--text-secondary)' : (diff > 0 ? 'var(--success)' : (diff < 0 ? 'var(--danger)' : 'var(--text-secondary)'));
+                return `<tr><td style="white-space:nowrap;">${escapeHTML(formatEditDate(e.at) || 'Unknown date')}</td>
+                    <td>${escapeHTML(e.id)}</td><td>${escapeHTML(e.name)}</td>
+                    <td>${hasFrom ? escapeHTML(e.from) : '&mdash;'}</td><td>${escapeHTML(e.to)}</td>
+                    <td style="color:${color};">${escapeHTML(diffTxt)}</td></tr>`;
+            }).join('');
+        }
+
+        // Called by the row clock icon and the "Check Edit History" button
+        function showComponentHistory(id) {
+            if (id === undefined || id === null || id === '') { showModal('Info', 'Select a component first'); return; }
+            componentHistoryFilterId = id;
+            renderComponentHistory();
+            const panel = document.getElementById('componentHistorySection');
+            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function showAllComponentHistory() {
+            componentHistoryFilterId = null;
+            document.getElementById('componentHistorySearch').value = '';
+            renderComponentHistory();
+        }
+
+        // Date the *previous* quantity was itself set — i.e. the "at" of the
+        // quantityHistory entry before the most recent one (the most recent
+        // entry's "at" is when the CURRENT quantity took effect, which is
+        // already stored as quantityUpdatedAt).
+        function previousQuantitySetDate(c) {
+            const list = Object.values((c && c.quantityHistory) || {}).filter(e => e && e.at);
+            if (list.length < 2) return '';
+            list.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+            return list[list.length - 2].at || '';
         }
 
         function previousQuantityCellHTML(c) {
@@ -4064,7 +4212,16 @@
                 const d = new Date(c.quantityUpdatedAt);
                 if (!isNaN(d.getTime())) tip += ` (changed ${d.toLocaleString('en-GB')})`;
             }
-            return `<td style="${muted}" title="${escapeHTML(tip)}">${escapeHTML(prev)}</td>`;
+            const setDate = previousQuantitySetDate(c);
+            const dateLine = setDate ? `<div style="font-size:11px;${muted}">as of ${escapeHTML(formatEditDate(setDate))}</div>` : `<div style="font-size:11px;${muted}">date unknown</div>`;
+            return `<td style="${muted}" title="${escapeHTML(tip)}">${escapeHTML(prev)}${dateLine}</td>`;
+        }
+
+        function currentQuantityCellHTML(c, qty) {
+            const dateLine = c && c.quantityUpdatedAt
+                ? `<div style="font-size:11px;color:var(--text-secondary);">as of ${escapeHTML(formatEditDate(c.quantityUpdatedAt))}</div>`
+                : `<div style="font-size:11px;color:var(--text-secondary);">&mdash;</div>`;
+            return `<td>${qty}${dateLine}</td>`;
         }
 
         const COMPONENT_PORTAL_SECTIONS = new Set(['production', 'packaging', 'print room', 'assembly']);
@@ -4102,16 +4259,20 @@
             else if (qty <= reorder) { statusBadge = '<span style="color: var(--warning);">Low Stock</span>'; rowStyle = 'background-color: rgba(255, 199, 95, 0.08);'; }
             const ds = c.datasheet ? `<a href="${c.datasheet}" target="_blank" style="color:var(--accent);">Link</a>` : '';
             return { rowStyle, html: `<td>${id}</td><td>${c.name||''}</td><td>${c.section||''}</td>
-                <td>${c.category||''}</td><td>${c.subCategory||''}</td>${previousQuantityCellHTML(c)}<td>${qty}</td>
+                <td>${c.category||''}</td><td>${c.subCategory||''}</td>${previousQuantityCellHTML(c)}${currentQuantityCellHTML(c, qty)}
+                ${lastUpdatedCellHTML(id, c)}
+                <td>${parseFloat(c.orderedQuantity) || 0}</td>
                 <td>${c.supplier||''}</td><td>${c.reorderLevel||''}</td><td>${c.location||''}</td><td>${ds}</td><td>${statusBadge}</td>` };
         }
 
         async function loadComponentData() {
             const tbody = document.getElementById('componentsTableBody');
-            tbody.innerHTML = '<tr><td colspan="12" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="14" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
             try {
                 const data = await fetchComponentData();
-                if (!data) { tbody.innerHTML = '<tr><td colspan="12" class="loading"><p>No data</p></td></tr>'; return; }
+                componentHistoryData = data || null;
+                renderComponentHistory();
+                if (!data) { tbody.innerHTML = '<tr><td colspan="14" class="loading"><p>No data</p></td></tr>'; return; }
                 tbody.innerHTML = '';
                 const entries = Array.isArray(data) ? data.map((c,i) => [i,c]).filter(([,c])=>c) : Object.entries(data);
                 entries.forEach(([id,c]) => {
@@ -4123,7 +4284,7 @@
                     row.innerHTML = html;
                     tbody.appendChild(row);
                 });
-            } catch (e) { tbody.innerHTML = '<tr><td colspan="12" class="loading"><p>Error loading</p></td></tr>'; }
+            } catch (e) { tbody.innerHTML = '<tr><td colspan="14" class="loading"><p>Error loading</p></td></tr>'; }
         }
 
         function selectComponentRow(row, id, c) {
@@ -4141,6 +4302,7 @@
                 });
             });
             document.getElementById('componentQuantityInput').value = c.quantity || '';
+            document.getElementById('componentOrderedQuantityInput').value = c.orderedQuantity || '';
             loadComponentSupplierOptions().then(() => {
                 document.getElementById('componentSupplierInput').value = c.supplier || '';
             });
@@ -4252,6 +4414,7 @@
                     category: document.getElementById('componentCategoryInput').value,
                     subCategory: document.getElementById('componentSubCategoryInput').value,
                     quantity: document.getElementById('componentQuantityInput').value,
+                    orderedQuantity: document.getElementById('componentOrderedQuantityInput').value,
                     supplier: document.getElementById('componentSupplierInput').value,
                     reorderLevel: document.getElementById('componentReorderInput').value,
                     location: document.getElementById('componentLocationInput').value.trim(),
@@ -4273,6 +4436,12 @@
                 const { ref, get, set } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
                 const compRef = ref(database, `component_data/${id}`);
                 if ((await get(compRef)).exists()) { showModal('Error', 'Component already exists'); return; }
+                const startQty = quantityToNumber(data.quantity);
+                if (Number.isFinite(startQty) && startQty > 0) {
+                    const at = new Date().toISOString();
+                    data.quantityUpdatedAt = at;
+                    data.quantityHistory = { [newHistoryKey()]: { from: null, to: startQty, at } };
+                }
                 await set(compRef, data);
                 showModal('Success', 'Component added');
                 loadComponentData();
@@ -4349,7 +4518,7 @@
                     found = true;
                 }
             });
-            if (!found) tbody.innerHTML = '<tr><td colspan="12" class="loading"><p>No matches</p></td></tr>';
+            if (!found) tbody.innerHTML = '<tr><td colspan="14" class="loading"><p>No matches</p></td></tr>';
         }
 
         function showAllComponents() {
@@ -4360,11 +4529,12 @@
 
         function clearComponentForm() {
             ['componentIdInput','componentNameInput','componentSectionInput','componentCategoryInput',
-             'componentSubCategoryInput','componentQuantityInput','componentSupplierInput',
+             'componentSubCategoryInput','componentQuantityInput','componentOrderedQuantityInput','componentSupplierInput',
              'componentReorderInput','componentLocationInput','componentDatasheetInput'].forEach(id => 
                 document.getElementById(id).value = '');
             if (selectedComponentRow) { selectedComponentRow.style.backgroundColor = ''; selectedComponentRow = null; }
             selectedComponentId = null;
+            if (componentHistoryFilterId !== null) { componentHistoryFilterId = null; renderComponentHistory(); }
             loadComponentCategoryOptions();
             loadComponentSupplierOptions();
         }
