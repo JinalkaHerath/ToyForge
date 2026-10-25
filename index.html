@@ -1586,6 +1586,23 @@
                 font-size: 18px;
             }
         }
+        /* Toy Batch Production portal */
+        #modal { z-index: 1100; }
+        #allocationModal { z-index: 1000; }
+        .batch-id-banner {
+            display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center;
+            padding: 12px 14px; margin-bottom: 14px; border-radius: 8px;
+            background: var(--dark); border: 1px dashed var(--accent);
+            font-size: 13px; color: var(--text-secondary);
+        }
+        .batch-id-banner strong { color: var(--accent); font-size: 16px; }
+        .batch-chip {
+            display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px;
+            background: rgba(108, 99, 255, 0.15); color: var(--accent); white-space: nowrap;
+        }
+        .batch-source-pill { font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+        .batch-source-pill.comp { background: rgba(255, 199, 95, 0.15); color: var(--warning); }
+        .batch-source-pill.printed { background: rgba(0, 201, 167, 0.15); color: var(--success); }
     </style>
 </head>
 <body>
@@ -1660,6 +1677,10 @@
             <button class="menu-item" onclick="openProductComponentsPortal()">
                 <i class="fas fa-puzzle-piece"></i>
                 <span>Product Components</span>
+            </button>
+            <button class="menu-item" onclick="openBatchPortal()">
+                <i class="fas fa-industry"></i>
+                <span>Toy Batch Production</span>
             </button>
             <button class="menu-item logout" onclick="logout()">
                 <i class="fas fa-sign-out-alt"></i>
@@ -3018,6 +3039,155 @@
                     </div>
                 </div>
             </div>
+            <!-- Toy Batch Production Portal -->
+            <div class="supplier-management-portal" id="batchProductionPortal" style="display: none;">
+                <div class="portal-header">
+                    <div class="portal-title">
+                        <i class="fas fa-industry"></i>
+                        <span>Toy Batch Production Portal</span>
+                    </div>
+                    <button class="back-button" onclick="closeWorkflowPortal('batchProductionPortal')">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </button>
+                </div>
+
+                <p style="margin:0 0 14px;color:var(--text-secondary);font-size:13px;">
+                    Each batch gets an automatic batch number and a running toy serial range. When a batch is created, the
+                    components allocated to the toy are deducted from the <strong>Components Portal</strong> stock and the
+                    printed parts are deducted from the <strong>Product Components Portal</strong> (Black / White printed totals).
+                </p>
+
+                <div class="bom-summary">
+                    <div class="bom-summary-item"><label>Next Batch No.</label><div class="value" id="batchSumNextId">—</div></div>
+                    <div class="bom-summary-item"><label>Batches Recorded</label><div class="value" id="batchSumCount">0</div></div>
+                    <div class="bom-summary-item"><label>Toys Built (All Batches)</label><div class="value" id="batchSumToys">0</div></div>
+                    <div class="bom-summary-item"><label>Next Toy Serial</label><div class="value" id="batchSumNextSerial">—</div></div>
+                </div>
+
+                <div class="search-analytics-section">
+                    <div class="search-container">
+                        <input type="text" id="batchSearchValue" class="search-input" placeholder="Search batches (number, toy, assembler, date...)">
+                        <button class="search-btn" onclick="searchBatches()"><i class="fas fa-search"></i> Search</button>
+                        <button class="show-all-btn" onclick="showAllBatches()"><i class="fas fa-list"></i> Show All</button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table class="employee-table">
+                            <thead>
+                                <tr>
+                                    <th>Batch No.</th>
+                                    <th>Toy</th>
+                                    <th>Toys in Batch</th>
+                                    <th>Toy Serial Range</th>
+                                    <th>Date</th>
+                                    <th>Assembler</th>
+                                    <th>Notes</th>
+                                    <th>Items Deducted</th>
+                                </tr>
+                            </thead>
+                            <tbody id="batchTableBody">
+                                <tr><td colspan="8" class="loading"><div class="spinner"></div><p>Loading batches...</p></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="supplier-form-section" id="batchDetailBox" style="display:none;">
+                    <div class="form-header"><i class="fas fa-clipboard-list"></i><span id="batchDetailTitle">Batch Details</span></div>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="bom-table">
+                                <thead><tr><th>Source</th><th>Item</th><th>Per Toy</th><th>Total Deducted</th><th>Stock Before</th><th>Stock After</th></tr></thead>
+                                <tbody id="batchDetailBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="supplier-form-section">
+                    <div class="form-header"><i class="fas fa-plus-circle"></i><span>Create New Batch</span></div>
+
+                    <div class="batch-id-banner">
+                        <label style="display:flex;align-items:center;gap:6px;">Batch No.
+                            <strong id="batchPrefixLabel">OCT-B</strong>
+                            <input id="batchNoInput" type="number" min="1" step="1" class="form-input" style="width:100px;" oninput="onBatchNumberingEdit('batchNo')" title="Edit the batch number">
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;">Toy serials from
+                            <strong id="batchSerialPrefixLabel">OCT-</strong>
+                            <input id="batchSerialStartInput" type="number" min="1" step="1" class="form-input" style="width:110px;" oninput="onBatchNumberingEdit('start')" title="First toy serial in this batch">
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;">to
+                            <input id="batchSerialEndInput" type="number" min="1" step="1" class="form-input" style="width:110px;" oninput="onBatchNumberingEdit('end')" title="Last toy serial in this batch (changes the toy count)">
+                        </label>
+                        <span class="batch-chip" id="batchNumberingMode">Automatic</span>
+                        <button type="button" class="back-button" style="background:var(--secondary);" onclick="resetBatchNumbering()"><i class="fas fa-rotate-left"></i> Reset to automatic</button>
+                    </div>
+
+                    <div class="form-container">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="batchToyInput">Toy</label>
+                                <select id="batchToyInput" class="form-select" onchange="onBatchToyChange()">
+                                    <option value="Octopus">Octopus</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="batchQuantityInput">Toys Made in This Batch</label>
+                                <input id="batchQuantityInput" type="number" min="1" step="1" value="1" class="form-input" oninput="onBatchQuantityChange()">
+                            </div>
+                            <div class="form-group">
+                                <label for="batchDateInput">Batch Date</label>
+                                <input id="batchDateInput" type="date" class="form-input">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="batchAssemblerInput">Assembler / Team</label>
+                                <input id="batchAssemblerInput" type="text" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label for="batchNotesInput">Notes</label>
+                                <input id="batchNotesInput" type="text" class="form-input" placeholder="Optional">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-header" style="margin-top:20px;">
+                        <i class="fas fa-list-ul"></i>
+                        <span>Components That Will Be Deducted</span>
+                        <span id="batchRecipeBadge" style="margin-left:15px;font-size:13px;"></span>
+                    </div>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="bom-table">
+                                <thead>
+                                    <tr><th>Source</th><th>Item</th><th>Per Toy</th><th>Required for Batch</th><th>Available</th><th>Status</th></tr>
+                                </thead>
+                                <tbody id="batchPreviewBody">
+                                    <tr><td colspan="6" class="loading"><p>Loading...</p></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="action-btn" style="background-color: var(--info);" onclick="openAllocationModal()">
+                            <i class="fas fa-sliders"></i> Allocate Components
+                        </button>
+                        <button class="bom-production-btn" id="createBatchBtn" onclick="createBatch()" disabled>
+                            <i class="fas fa-check-circle"></i> Create Batch &amp; Deduct Stock
+                        </button>
+                        <button class="action-btn delete-btn" onclick="deleteBatch()">
+                            <i class="fas fa-rotate-left"></i> Delete Selected Batch (Restore Stock)
+                        </button>
+                        <button class="action-btn clear-btn" onclick="clearBatchForm()">
+                            <i class="fas fa-broom"></i> Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -3037,6 +3207,66 @@
             <div class="spinner" id="rfidSpinner"></div>
             <p id="rfidStatus">Waiting for RFID...</p>
             <button class="modal-btn modal-btn-danger" onclick="cancelRFIDCapture()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Component Allocation pop-up (Toy Batch Production) -->
+    <div class="analytics-modal" id="allocationModal">
+        <div class="analytics-modal-content" style="max-width: 920px;">
+            <div class="analytics-modal-header">
+                <h2><i class="fas fa-sliders"></i> Allocate Components — <span id="allocToyName">Octopus</span></h2>
+                <button class="close-btn" onclick="closeAllocationModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="analytics-modal-body">
+                <p style="color:var(--text-secondary);font-size:12px;margin-bottom:12px;">
+                    Define what <strong>one toy</strong> uses. Pick items from the Components Portal or the printed parts
+                    (Black / White) from the Product Components Portal. Batches multiply these amounts by the number of toys built.
+                </p>
+                <div class="form-container">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="allocSourceInput">Source</label>
+                            <select id="allocSourceInput" class="form-select" onchange="populateAllocationItems()">
+                                <option value="component">Components Portal</option>
+                                <option value="printed">Product Components (printed parts)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="allocFilterInput">Filter items</label>
+                            <input id="allocFilterInput" type="text" class="form-input" placeholder="Type to filter..." oninput="populateAllocationItems()">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="flex:2;">
+                            <label for="allocItemInput">Item</label>
+                            <select id="allocItemInput" class="form-select"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="allocQtyInput">Quantity per Toy</label>
+                            <input id="allocQtyInput" type="number" min="0" step="0.01" value="1" class="form-input">
+                        </div>
+                        <div class="form-group" style="display:flex;align-items:flex-end;">
+                            <button type="button" class="action-btn add-btn" style="width:100%;" onclick="addAllocationLine()">
+                                <i class="fas fa-plus"></i> Add / Update Line
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-container" style="margin-top:14px;">
+                    <div class="table-wrapper" style="max-height:300px;">
+                        <table class="bom-table">
+                            <thead><tr><th>Source</th><th>Item</th><th>Qty per Toy</th><th></th></tr></thead>
+                            <tbody id="allocLinesBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button class="action-btn add-btn" onclick="saveAllocation()"><i class="fas fa-save"></i> Save Allocation</button>
+                    <button class="action-btn clear-btn" onclick="closeAllocationModal()"><i class="fas fa-times"></i> Cancel</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -3191,7 +3421,7 @@
             const ids = ['dashboardContent', 'employeesContent', 'supplierManagementPortal', 
                 'categoryManagementPortal', 'componentsManagementPortal', 'assemblyManagementPortal',
                 'packagingManagementPortal', 'filamentManagementPortal', 'rdComponentsManagementPortal',
-                'productComponentsManagementPortal'];
+                'productComponentsManagementPortal', 'batchProductionPortal'];
             ids.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.style.display = 'none';
@@ -5219,7 +5449,7 @@
             return { key: raw, part: raw.slice(0, marker).trim(), color: raw.slice(marker + 2).trim().toLowerCase() };
         }
 
-        async function getPrintedPartUsageMap(excludeAssemblyId = null) {
+        async function getAssemblyPrintedPartUsageMap(excludeAssemblyId = null) {
             const database = window.firebaseDatabase;
             if (!database) throw new Error('Firebase database not initialized');
             const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
@@ -6401,6 +6631,638 @@
         async function importInventoryFromSpreadsheet() {
             showModal('Info', 'Inventory sync from spreadsheet is available in the full implementation. ' +
                 'The SPREADSHEET_COMPONENTS array must be defined with the master inventory data.');
+        }
+
+        // ============================================================
+        // TOY BATCH PRODUCTION PORTAL
+        // Automatic batch numbering + automatic stock deduction from
+        // Components (component_data) and Product Components (printed parts).
+        // Firebase nodes used:
+        //   toy_recipes/<toy>        -> per-toy component allocation (pop-up)
+        //   toy_batch_counter/<toy>  -> { lastBatchNo, lastToySerial }
+        //   toy_batch_data/<batchId> -> one record per batch (with what was deducted)
+        // ============================================================
+
+        const BATCH_TOY_CODES = { 'Octopus': 'OCT' };
+        let batchRecipeLines = [];
+        let batchAllocDraft = [];
+        let batchRecords = [];
+        let selectedBatchId = null;
+        let batchPopupComponents = [];
+        let batchPopupParts = [];
+        let batchPreviewSeq = 0;
+
+        async function batchFirebase() {
+            const database = window.firebaseDatabase;
+            if (!database) throw new Error('Firebase database not initialized');
+            const fb = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+            return { database, ...fb };
+        }
+
+        function batchToy() { return document.getElementById('batchToyInput')?.value || 'Octopus'; }
+        function batchToyCode(toy) {
+            return BATCH_TOY_CODES[toy] || (String(toy).replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase() || 'TOY');
+        }
+        function formatBatchId(code, n) { return `${code}-B${String(n).padStart(4, '0')}`; }
+        function formatToySerial(code, n) { return `${code}-${String(n).padStart(5, '0')}`; }
+        function fmtBatchQty(n) { const v = Math.round(Number(n) * 10000) / 10000; return String(v); }
+        function toArr(v) { return !v ? [] : (Array.isArray(v) ? v : Object.values(v)).filter(Boolean); }
+        function round4(n) { return Math.round(Number(n) * 10000) / 10000; }
+
+        async function batchFetchAllComponents() {
+            const { database, ref, get } = await batchFirebase();
+            const snap = await get(ref(database, 'component_data'));
+            const val = snap.exists() ? snap.val() : {};
+            const out = {};
+            Object.entries(val || {}).forEach(([id, c]) => { if (c) out[id] = c; });
+            return out;
+        }
+
+        // Printed-part usage = assembly usage + batch usage, so the Product Components
+        // Portal and the Assembly Portal both see parts consumed by toy batches.
+        async function getPrintedPartUsageMap(excludeAssemblyId = null) {
+            const usage = await getAssemblyPrintedPartUsageMap(excludeAssemblyId);
+            const { database, ref, get } = await batchFirebase();
+            const snap = await get(ref(database, 'toy_batch_data'));
+            if (!snap.exists()) return usage;
+            Object.values(snap.val() || {}).forEach(rec => {
+                toArr(rec?.consumed?.printed).forEach(p => {
+                    if (!p || !p.part || !p.color) return;
+                    const key = `${p.part}||${String(p.color).toLowerCase()}`;
+                    usage[key] = (usage[key] || 0) + (Number(p.used) || 0);
+                });
+            });
+            return usage;
+        }
+
+        function printedAvailableFor(part, color, totals, usage) {
+            const t = totals[part] || { blackPrinted: 0, whitePrinted: 0, blackDamaged: 0, whiteDamaged: 0 };
+            const printed = color === 'black' ? Number(t.blackPrinted || 0) : Number(t.whitePrinted || 0);
+            const damaged = color === 'black' ? Number(t.blackDamaged || 0) : Number(t.whiteDamaged || 0);
+            const used = Number(usage[`${part}||${color}`] || 0);
+            return printed - damaged - used;
+        }
+
+        async function openBatchPortal() {
+            hideAllPortals();
+            document.getElementById('batchProductionPortal').style.display = 'block';
+            document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
+            document.querySelectorAll('.menu-item')[10].classList.add('active');
+            closeSidebar();
+            document.getElementById('batchDateInput').value = localDateISO();
+            document.getElementById('batchQuantityInput').value = 1;
+            batchNumberingManual = false;
+            selectedBatchId = null;
+            document.getElementById('batchDetailBox').style.display = 'none';
+            try {
+                await loadBatchRecipe();
+                await loadBatchTable();
+                await updateBatchPreview();
+            } catch (e) { showModal('Error', e.message); }
+        }
+
+        async function onBatchToyChange() {
+            await loadBatchRecipe();
+            await loadBatchTable();
+            await updateBatchPreview();
+        }
+
+        let batchQtyTimer = null;
+        function onBatchQuantityChange() {
+            clearTimeout(batchQtyTimer);
+            batchQtyTimer = setTimeout(() => { updateBatchPreview(); refreshBatchNumberPreview(); }, 250);
+        }
+
+        async function loadBatchRecipe() {
+            const { database, ref, get } = await batchFirebase();
+            const snap = await get(ref(database, `toy_recipes/${batchToy()}`));
+            const val = snap.exists() ? snap.val() : null;
+            batchRecipeLines = toArr(val?.lines);
+        }
+
+        // ---- Batch numbering preview ----
+        // When true, the user has typed their own batch number / serial range
+        // and the automatic values no longer overwrite the fields.
+        let batchNumberingManual = false;
+
+        function updateNumberingModeChip() {
+            const chip = document.getElementById('batchNumberingMode');
+            if (!chip) return;
+            chip.textContent = batchNumberingManual ? 'Manual numbering' : 'Automatic';
+            chip.style.background = batchNumberingManual ? 'rgba(255, 199, 95, 0.2)' : '';
+            chip.style.color = batchNumberingManual ? 'var(--warning)' : '';
+        }
+
+        async function refreshBatchNumberPreview() {
+            try {
+                const toy = batchToy();
+                const code = batchToyCode(toy);
+                const { database, ref, get } = await batchFirebase();
+                const snap = await get(ref(database, `toy_batch_counter/${toy}`));
+                const c = snap.exists() ? snap.val() : {};
+                const nextNo = (Number(c.lastBatchNo) || 0) + 1;
+                const autoStart = (Number(c.lastToySerial) || 0) + 1;
+                const qty = Math.max(1, parseInt(document.getElementById('batchQuantityInput').value) || 1);
+
+                document.getElementById('batchSumNextId').textContent = formatBatchId(code, nextNo);
+                document.getElementById('batchSumNextSerial').textContent = formatToySerial(code, autoStart);
+                document.getElementById('batchPrefixLabel').textContent = `${code}-B`;
+                document.getElementById('batchSerialPrefixLabel').textContent = `${code}-`;
+
+                const noEl = document.getElementById('batchNoInput');
+                const startEl = document.getElementById('batchSerialStartInput');
+                const endEl = document.getElementById('batchSerialEndInput');
+                if (!batchNumberingManual) {
+                    noEl.value = nextNo;
+                    startEl.value = autoStart;
+                    endEl.value = autoStart + qty - 1;
+                } else {
+                    const s = parseInt(startEl.value);
+                    if (Number.isFinite(s)) endEl.value = s + qty - 1;
+                }
+                updateNumberingModeChip();
+            } catch (e) { console.error(e); }
+        }
+
+        // Called when the user edits the batch number or serial range.
+        // Editing "from" shifts the range, editing "to" changes the toy count.
+        function onBatchNumberingEdit(field) {
+            batchNumberingManual = true;
+            const startEl = document.getElementById('batchSerialStartInput');
+            const endEl = document.getElementById('batchSerialEndInput');
+            const qtyEl = document.getElementById('batchQuantityInput');
+            const start = parseInt(startEl.value);
+            const end = parseInt(endEl.value);
+            const qty = Math.max(1, parseInt(qtyEl.value) || 1);
+            if (field === 'start' && Number.isFinite(start)) {
+                endEl.value = start + qty - 1;
+            } else if (field === 'end' && Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+                qtyEl.value = end - start + 1;
+                updateBatchPreview();
+            }
+            updateNumberingModeChip();
+        }
+
+        function resetBatchNumbering() {
+            batchNumberingManual = false;
+            refreshBatchNumberPreview();
+        }
+
+        // Serial range of a stored batch as numbers (null if it cannot be read)
+        function batchRecordSerialRange(r) {
+            const s = parseInt(String(r?.serialStart ?? '').replace(/\D/g, ''));
+            const e = parseInt(String(r?.serialEnd ?? '').replace(/\D/g, ''));
+            return Number.isFinite(s) && Number.isFinite(e) ? { start: s, end: e } : null;
+        }
+
+        // ---- Preview of what a batch will deduct ----
+        async function updateBatchPreview() {
+            const seq = ++batchPreviewSeq;
+            const body = document.getElementById('batchPreviewBody');
+            const badge = document.getElementById('batchRecipeBadge');
+            const btn = document.getElementById('createBatchBtn');
+            const qty = parseInt(document.getElementById('batchQuantityInput').value) || 0;
+            refreshBatchNumberPreview();
+            if (!batchRecipeLines.length) {
+                body.innerHTML = '<tr><td colspan="6" class="loading"><p>No components allocated yet. Click "Allocate Components" to define what one toy uses.</p></td></tr>';
+                badge.textContent = '';
+                btn.disabled = true;
+                return;
+            }
+            try {
+                const comps = await batchFetchAllComponents();
+                const { totals, usage } = await getPrintedPartTotalsWithUsage();
+                if (seq !== batchPreviewSeq) return;
+
+                const needByKey = {};
+                batchRecipeLines.forEach(l => {
+                    const key = l.kind === 'printed' ? `p:${l.part}||${l.color}` : `c:${l.id}`;
+                    needByKey[key] = (needByKey[key] || 0) + Number(l.qtyPerToy || 0) * qty;
+                });
+
+                let allOk = qty > 0;
+                let html = '';
+                batchRecipeLines.forEach(l => {
+                    const isPrinted = l.kind === 'printed';
+                    const key = isPrinted ? `p:${l.part}||${l.color}` : `c:${l.id}`;
+                    const required = Number(l.qtyPerToy || 0) * qty;
+                    let available = null;
+                    if (isPrinted) available = printedAvailableFor(l.part, l.color, totals, usage);
+                    else if (comps[l.id]) available = parseFloat(comps[l.id].quantity) || 0;
+                    const ok = available !== null && available >= needByKey[key];
+                    if (!ok) allOk = false;
+                    const cls = ok ? 'bom-status-ok' : (available !== null && available > 0 ? 'bom-status-warning' : 'bom-status-danger');
+                    const txt = available === null ? '✗ Component missing' : (ok ? '✓ Available' : (available > 0 ? '⚠ Not enough' : '✗ Out of stock'));
+                    html += `<tr>
+                        <td><span class="batch-source-pill ${isPrinted ? 'printed' : 'comp'}">${isPrinted ? 'Product Components' : 'Components'}</span></td>
+                        <td>${escapeHTML(l.label || l.id || l.part)}</td>
+                        <td>${fmtBatchQty(l.qtyPerToy)}</td>
+                        <td>${fmtBatchQty(required)}</td>
+                        <td>${available === null ? '—' : fmtBatchQty(available)}</td>
+                        <td class="${cls}">${txt}</td></tr>`;
+                });
+                body.innerHTML = html;
+                if (qty <= 0) {
+                    badge.textContent = 'Enter the number of toys in this batch';
+                    badge.style.color = 'var(--warning)';
+                } else if (allOk) {
+                    badge.textContent = '✓ All materials available';
+                    badge.style.color = 'var(--success)';
+                } else {
+                    badge.textContent = '⚠ Some materials are low or out of stock';
+                    badge.style.color = 'var(--warning)';
+                }
+                btn.disabled = !allOk;
+            } catch (e) {
+                console.error(e);
+                body.innerHTML = '<tr><td colspan="6" class="loading"><p>Error loading stock</p></td></tr>';
+                btn.disabled = true;
+            }
+        }
+
+        // ---- Create batch ----
+        async function createBatch() {
+            const toy = batchToy();
+            const code = batchToyCode(toy);
+            const qty = parseInt(document.getElementById('batchQuantityInput').value) || 0;
+            const date = document.getElementById('batchDateInput').value || localDateISO();
+            if (qty <= 0) { showModal('Error', 'Enter the number of toys made in this batch'); return; }
+            if (!batchRecipeLines.length) { showModal('Error', 'Allocate components for this toy first'); return; }
+            if (!isValidDate(date)) { showModal('Error', 'Enter a valid batch date'); return; }
+
+            const btn = document.getElementById('createBatchBtn');
+            btn.disabled = true;
+            try {
+                const { database, ref, get, update, runTransaction } = await batchFirebase();
+
+                // Re-check live stock right before deducting
+                const comps = await batchFetchAllComponents();
+                const { totals, usage } = await getPrintedPartTotalsWithUsage();
+                const compNeed = {}, printedNeed = {};
+                batchRecipeLines.forEach(l => {
+                    const req = Number(l.qtyPerToy || 0) * qty;
+                    if (l.kind === 'printed') {
+                        const k = `${l.part}||${l.color}`;
+                        printedNeed[k] = { part: l.part, color: l.color, label: l.label, perToy: 0, used: 0, ...(printedNeed[k] || {}) };
+                        printedNeed[k].perToy += Number(l.qtyPerToy || 0);
+                        printedNeed[k].used += req;
+                    } else {
+                        compNeed[l.id] = { id: l.id, label: l.label, perToy: 0, used: 0, ...(compNeed[l.id] || {}) };
+                        compNeed[l.id].perToy += Number(l.qtyPerToy || 0);
+                        compNeed[l.id].used += req;
+                    }
+                });
+                const problems = [];
+                Object.values(compNeed).forEach(n => {
+                    const c = comps[n.id];
+                    if (!c) { problems.push(`${n.label || n.id}: component no longer exists`); return; }
+                    const have = parseFloat(c.quantity) || 0;
+                    if (have < n.used) problems.push(`${n.label || n.id}: need ${fmtBatchQty(n.used)}, have ${fmtBatchQty(have)}`);
+                });
+                Object.values(printedNeed).forEach(n => {
+                    const have = printedAvailableFor(n.part, n.color, totals, usage);
+                    if (have < n.used) problems.push(`${n.label || n.part}: need ${fmtBatchQty(n.used)}, available ${fmtBatchQty(Math.max(0, have))}`);
+                });
+                if (problems.length) {
+                    showModal('Cannot create batch', 'Not enough stock:\n' + problems.join('\n'));
+                    await updateBatchPreview();
+                    return;
+                }
+
+                // Manual batch number / serial range: validate before anything is deducted
+                const manual = batchNumberingManual;
+                let manualNo = 0, manualStart = 0, manualEnd = 0;
+                if (manual) {
+                    manualNo = parseInt(document.getElementById('batchNoInput').value);
+                    manualStart = parseInt(document.getElementById('batchSerialStartInput').value);
+                    manualEnd = parseInt(document.getElementById('batchSerialEndInput').value);
+                    if (![manualNo, manualStart, manualEnd].every(n => Number.isFinite(n) && n >= 1)) {
+                        showModal('Error', 'Batch number and serial range must be whole numbers of 1 or more');
+                        return;
+                    }
+                    if (manualEnd - manualStart + 1 !== qty) {
+                        showModal('Error', `The serial range ${manualStart}–${manualEnd} covers ${manualEnd - manualStart + 1} toys, but this batch has ${qty}. Adjust the range or the toy count.`);
+                        return;
+                    }
+                    const existingSnap = await get(ref(database, 'toy_batch_data'));
+                    const existing = existingSnap.exists() ? Object.entries(existingSnap.val()).filter(([, r]) => r) : [];
+                    const wantedId = formatBatchId(code, manualNo);
+                    if (existing.some(([id]) => id === wantedId)) {
+                        showModal('Error', `Batch ${wantedId} already exists. Choose a different batch number.`);
+                        return;
+                    }
+                    const clash = existing.find(([, r]) => {
+                        if (r.toy !== toy) return false;
+                        const range = batchRecordSerialRange(r);
+                        return range && manualStart <= range.end && manualEnd >= range.start;
+                    });
+                    if (clash) {
+                        showModal('Error', `This serial range overlaps batch ${clash[1].batchId || clash[0]} (${clash[1].serialStart} → ${clash[1].serialEnd}). Choose a different range.`);
+                        return;
+                    }
+                }
+
+                const idPreview = manual ? formatBatchId(code, manualNo) : 'the next batch number';
+                if (!confirm(`Create ${manual ? 'batch ' + idPreview : 'a batch'} of ${qty} x ${toy}? This will deduct ${Object.keys(compNeed).length} component(s) and ${Object.keys(printedNeed).length} printed part(s) from stock.`)) {
+                    btn.disabled = false;
+                    return;
+                }
+
+                // Batch number + toy serial allocation (atomic counter; manual values only move it forward)
+                let batchNo, serialStart, serialEnd;
+                if (manual) {
+                    batchNo = manualNo; serialStart = manualStart; serialEnd = manualEnd;
+                    await runTransaction(ref(database, `toy_batch_counter/${toy}`), cur => {
+                        const c = cur || {};
+                        return { lastBatchNo: Math.max(Number(c.lastBatchNo) || 0, batchNo),
+                                 lastToySerial: Math.max(Number(c.lastToySerial) || 0, serialEnd) };
+                    });
+                } else {
+                    const tx = await runTransaction(ref(database, `toy_batch_counter/${toy}`), cur => {
+                        const c = cur || {};
+                        return { lastBatchNo: (Number(c.lastBatchNo) || 0) + 1, lastToySerial: (Number(c.lastToySerial) || 0) + qty };
+                    });
+                    const counter = tx.snapshot.val();
+                    batchNo = counter.lastBatchNo;
+                    serialEnd = counter.lastToySerial;
+                    serialStart = serialEnd - qty + 1;
+                }
+                const batchId = formatBatchId(code, batchNo);
+
+                const updates = {};
+                const consumedComponents = [];
+                Object.values(compNeed).forEach(n => {
+                    const before = parseFloat(comps[n.id].quantity) || 0;
+                    const after = Math.max(0, round4(before - n.used));
+                    updates[`component_data/${n.id}/quantity`] = after;
+                    stampQuantityHistory(updates, n.id, before, after);
+                    consumedComponents.push({ id: n.id, name: n.label || comps[n.id].name || n.id,
+                        qtyPerToy: round4(n.perToy), used: round4(n.used), before, after });
+                });
+                const consumedPrinted = Object.values(printedNeed).map(n => ({
+                    part: n.part, color: n.color, name: n.label || `${n.part} — ${n.color}`,
+                    qtyPerToy: round4(n.perToy), used: round4(n.used),
+                    before: printedAvailableFor(n.part, n.color, totals, usage),
+                    after: printedAvailableFor(n.part, n.color, totals, usage) - n.used
+                }));
+
+                updates[`toy_batch_data/${batchId}`] = {
+                    batchId, batchNo, toy, quantity: qty,
+                    serialStart: formatToySerial(code, serialStart),
+                    serialEnd: formatToySerial(code, serialEnd),
+                    date,
+                    assembler: document.getElementById('batchAssemblerInput').value.trim(),
+                    notes: document.getElementById('batchNotesInput').value.trim(),
+                    createdAt: new Date().toISOString(),
+                    timestamp: Date.now(),
+                    manualNumbering: manual,
+                    consumed: { components: consumedComponents, printed: consumedPrinted }
+                };
+                await update(ref(database), updates);
+
+                showModal('Batch Created', `${batchId}: ${qty} x ${toy}\nToy serials ${formatToySerial(code, serialStart)} → ${formatToySerial(code, serialEnd)}\nComponents and printed parts deducted.`);
+                document.getElementById('batchQuantityInput').value = 1;
+                document.getElementById('batchNotesInput').value = '';
+                batchNumberingManual = false;
+                await loadBatchTable();
+                await updateBatchPreview();
+                updateDashboardMetrics();
+            } catch (e) {
+                console.error(e);
+                showModal('Error', e.message);
+            } finally {
+                btn.disabled = false;
+                updateBatchPreview();
+            }
+        }
+
+        // ---- Batch history table ----
+        function renderBatchTable(entries) {
+            const body = document.getElementById('batchTableBody');
+            if (!entries.length) {
+                body.innerHTML = '<tr><td colspan="8" class="loading"><p>No batches recorded yet</p></td></tr>';
+                return;
+            }
+            body.innerHTML = '';
+            entries.forEach(([id, r]) => {
+                const itemCount = toArr(r.consumed?.components).length + toArr(r.consumed?.printed).length;
+                const row = document.createElement('tr');
+                row.dataset.id = id;
+                if (id === selectedBatchId) row.style.backgroundColor = 'rgba(108, 99, 255, 0.2)';
+                row.innerHTML = `
+                    <td><strong>${escapeHTML(r.batchId || id)}</strong></td>
+                    <td>${escapeHTML(r.toy)}</td>
+                    <td>${escapeHTML(r.quantity)}</td>
+                    <td><span class="batch-chip">${escapeHTML(r.serialStart)}${r.quantity > 1 ? ' → ' + escapeHTML(r.serialEnd) : ''}</span></td>
+                    <td>${escapeHTML(r.date)}</td>
+                    <td>${escapeHTML(r.assembler)}</td>
+                    <td>${escapeHTML(r.notes)}</td>
+                    <td>${itemCount} items</td>`;
+                row.onclick = () => selectBatch(id);
+                body.appendChild(row);
+            });
+        }
+
+        async function loadBatchTable() {
+            const body = document.getElementById('batchTableBody');
+            body.innerHTML = '<tr><td colspan="8" class="loading"><div class="spinner"></div><p>Loading batches...</p></td></tr>';
+            try {
+                const { database, ref, get } = await batchFirebase();
+                const snap = await get(ref(database, 'toy_batch_data'));
+                batchRecords = snap.exists() ? Object.entries(snap.val()).filter(([, r]) => r) : [];
+                batchRecords.sort((a, b) => (Number(b[1].timestamp) || 0) - (Number(a[1].timestamp) || 0));
+                const q = (document.getElementById('batchSearchValue')?.value || '').trim().toLowerCase();
+                renderBatchTable(q ? batchRecords.filter(([id, r]) => JSON.stringify([id, r]).toLowerCase().includes(q)) : batchRecords);
+                document.getElementById('batchSumCount').textContent = batchRecords.length;
+                document.getElementById('batchSumToys').textContent =
+                    batchRecords.reduce((s, [, r]) => s + (Number(r.quantity) || 0), 0);
+            } catch (e) {
+                console.error(e);
+                body.innerHTML = '<tr><td colspan="8" class="loading"><p>Error loading batches</p></td></tr>';
+            }
+        }
+
+        function searchBatches() {
+            const q = document.getElementById('batchSearchValue').value.trim().toLowerCase();
+            if (!q) { renderBatchTable(batchRecords); return; }
+            const filtered = batchRecords.filter(([id, r]) => JSON.stringify([id, r]).toLowerCase().includes(q));
+            if (!filtered.length) { showModal('Info', 'No matching batches found'); return; }
+            renderBatchTable(filtered);
+        }
+
+        function showAllBatches() {
+            document.getElementById('batchSearchValue').value = '';
+            renderBatchTable(batchRecords);
+        }
+
+        function selectBatch(id) {
+            selectedBatchId = id;
+            const entry = batchRecords.find(([key]) => key === id);
+            if (!entry) return;
+            const r = entry[1];
+            document.querySelectorAll('#batchTableBody tr').forEach(row =>
+                row.style.backgroundColor = row.dataset.id === id ? 'rgba(108, 99, 255, 0.2)' : '');
+            document.getElementById('batchDetailTitle').textContent =
+                `${r.batchId || id} — ${r.quantity} x ${r.toy} (${r.serialStart}${r.quantity > 1 ? ' → ' + r.serialEnd : ''})`;
+            const rows = [];
+            toArr(r.consumed?.components).forEach(c => rows.push(`<tr>
+                <td><span class="batch-source-pill comp">Components</span></td><td>${escapeHTML(c.name || c.id)}</td>
+                <td>${fmtBatchQty(c.qtyPerToy)}</td><td>${fmtBatchQty(c.used)}</td>
+                <td>${fmtBatchQty(c.before)}</td><td>${fmtBatchQty(c.after)}</td></tr>`));
+            toArr(r.consumed?.printed).forEach(p => rows.push(`<tr>
+                <td><span class="batch-source-pill printed">Product Components</span></td><td>${escapeHTML(p.name || p.part)}</td>
+                <td>${fmtBatchQty(p.qtyPerToy)}</td><td>${fmtBatchQty(p.used)}</td>
+                <td>${fmtBatchQty(p.before)}</td><td>${fmtBatchQty(p.after)}</td></tr>`));
+            document.getElementById('batchDetailBody').innerHTML = rows.join('') ||
+                '<tr><td colspan="6" class="loading"><p>No items recorded</p></td></tr>';
+            document.getElementById('batchDetailBox').style.display = 'block';
+        }
+
+        // ---- Delete batch (restores stock) ----
+        async function deleteBatch() {
+            if (!selectedBatchId) { showModal('Error', 'Select a batch from the table first'); return; }
+            const entry = batchRecords.find(([key]) => key === selectedBatchId);
+            if (!entry) { showModal('Error', 'Batch not found'); return; }
+            const r = entry[1];
+            if (!confirm(`Delete ${r.batchId || selectedBatchId}? Its components will be added back to the Components Portal and its printed parts released in the Product Components Portal. Batch numbers and toy serials are not reused.`)) return;
+            try {
+                const { database, ref, update } = await batchFirebase();
+                const comps = await batchFetchAllComponents();
+                const updates = {};
+                const restore = {};
+                toArr(r.consumed?.components).forEach(c => { restore[c.id] = (restore[c.id] || 0) + (Number(c.used) || 0); });
+                let skipped = 0;
+                Object.entries(restore).forEach(([cid, amount]) => {
+                    const cur = comps[cid];
+                    if (!cur) { skipped++; return; }
+                    const before = parseFloat(cur.quantity) || 0;
+                    const after = round4(before + amount);
+                    updates[`component_data/${cid}/quantity`] = after;
+                    stampQuantityHistory(updates, cid, before, after);
+                });
+                updates[`toy_batch_data/${selectedBatchId}`] = null;
+                await update(ref(database), updates);
+                showModal('Batch Deleted', `${r.batchId || selectedBatchId} removed and stock restored.` +
+                    (skipped ? `\n${skipped} component(s) no longer exist and could not be restored.` : ''));
+                selectedBatchId = null;
+                document.getElementById('batchDetailBox').style.display = 'none';
+                await loadBatchTable();
+                await updateBatchPreview();
+                updateDashboardMetrics();
+            } catch (e) { showModal('Error', e.message); }
+        }
+
+        function clearBatchForm() {
+            batchNumberingManual = false;
+            document.getElementById('batchQuantityInput').value = 1;
+            document.getElementById('batchDateInput').value = localDateISO();
+            document.getElementById('batchAssemblerInput').value = '';
+            document.getElementById('batchNotesInput').value = '';
+            selectedBatchId = null;
+            document.getElementById('batchDetailBox').style.display = 'none';
+            document.querySelectorAll('#batchTableBody tr').forEach(row => row.style.backgroundColor = '');
+            updateBatchPreview();
+        }
+
+        // ---- Allocation pop-up ----
+        async function openAllocationModal() {
+            document.getElementById('allocToyName').textContent = batchToy();
+            batchAllocDraft = batchRecipeLines.map(l => ({ ...l }));
+            document.getElementById('allocSourceInput').value = 'component';
+            document.getElementById('allocFilterInput').value = '';
+            document.getElementById('allocQtyInput').value = 1;
+            try {
+                const data = await fetchComponentData();
+                batchPopupComponents = data ? Object.entries(data).filter(([, c]) => c) : [];
+                batchPopupParts = Array.from(new Set((await fetchPrintedPartsMaster()).map(p => String(p).trim()).filter(Boolean)))
+                    .sort((a, b) => a.localeCompare(b));
+            } catch (e) { console.error(e); showModal('Error', e.message); return; }
+            populateAllocationItems();
+            renderAllocationLines();
+            document.getElementById('allocationModal').classList.add('active');
+        }
+
+        function closeAllocationModal() {
+            document.getElementById('allocationModal').classList.remove('active');
+        }
+
+        function populateAllocationItems() {
+            const source = document.getElementById('allocSourceInput').value;
+            const filter = document.getElementById('allocFilterInput').value.trim().toLowerCase();
+            const select = document.getElementById('allocItemInput');
+            let html = '';
+            if (source === 'component') {
+                batchPopupComponents.forEach(([id, c]) => {
+                    const label = `${c.name || ''} — ${[c.category, c.subCategory].filter(Boolean).join(' / ')} [${id}] (${parseFloat(c.quantity) || 0} in stock)`;
+                    if (filter && !label.toLowerCase().includes(filter)) return;
+                    html += `<option value="${escapeHTML(id)}">${escapeHTML(label)}</option>`;
+                });
+            } else {
+                batchPopupParts.forEach(part => {
+                    ['Black', 'White'].forEach(color => {
+                        const label = `${part} — ${color}`;
+                        if (filter && !label.toLowerCase().includes(filter)) return;
+                        html += `<option value="${escapeHTML(part + '||' + color.toLowerCase())}">${escapeHTML(label)}</option>`;
+                    });
+                });
+            }
+            select.innerHTML = html || '<option value="">No matching items</option>';
+        }
+
+        function allocationLineKey(l) { return l.kind === 'printed' ? `p:${l.part}||${l.color}` : `c:${l.id}`; }
+
+        function addAllocationLine() {
+            const source = document.getElementById('allocSourceInput').value;
+            const value = document.getElementById('allocItemInput').value;
+            const qty = parseFloat(document.getElementById('allocQtyInput').value);
+            if (!value) { showModal('Error', 'Select an item'); return; }
+            if (!Number.isFinite(qty) || qty <= 0) { showModal('Error', 'Enter a quantity per toy greater than zero'); return; }
+            let line;
+            if (source === 'component') {
+                const entry = batchPopupComponents.find(([id]) => id === value);
+                if (!entry) { showModal('Error', 'Component not found'); return; }
+                const c = entry[1];
+                line = { kind: 'component', id: value,
+                    label: `${c.name || value}${c.subCategory ? ' — ' + c.subCategory : ''}`, qtyPerToy: qty };
+            } else {
+                const [part, color] = value.split('||');
+                line = { kind: 'printed', part, color,
+                    label: `${part} — ${color.charAt(0).toUpperCase() + color.slice(1)}`, qtyPerToy: qty };
+            }
+            const idx = batchAllocDraft.findIndex(l => allocationLineKey(l) === allocationLineKey(line));
+            if (idx >= 0) batchAllocDraft[idx] = line; else batchAllocDraft.push(line);
+            renderAllocationLines();
+        }
+
+        function removeAllocationLine(i) {
+            batchAllocDraft.splice(i, 1);
+            renderAllocationLines();
+        }
+
+        function renderAllocationLines() {
+            const body = document.getElementById('allocLinesBody');
+            if (!batchAllocDraft.length) {
+                body.innerHTML = '<tr><td colspan="4" class="loading"><p>No components allocated yet</p></td></tr>';
+                return;
+            }
+            body.innerHTML = batchAllocDraft.map((l, i) => `<tr>
+                <td><span class="batch-source-pill ${l.kind === 'printed' ? 'printed' : 'comp'}">${l.kind === 'printed' ? 'Product Components' : 'Components'}</span></td>
+                <td>${escapeHTML(l.label)}</td>
+                <td>${fmtBatchQty(l.qtyPerToy)}</td>
+                <td><button type="button" class="action-btn delete-btn" style="padding:4px 10px;min-width:0;flex:0 0 auto;" onclick="removeAllocationLine(${i})"><i class="fas fa-times"></i></button></td>
+            </tr>`).join('');
+        }
+
+        async function saveAllocation() {
+            try {
+                const { database, ref, set } = await batchFirebase();
+                const toy = batchToy();
+                await set(ref(database, `toy_recipes/${toy}`), { lines: batchAllocDraft, updatedAt: new Date().toISOString() });
+                batchRecipeLines = batchAllocDraft.map(l => ({ ...l }));
+                closeAllocationModal();
+                showModal('Success', `Component allocation for ${toy} saved (${batchRecipeLines.length} line${batchRecipeLines.length === 1 ? '' : 's'}).`);
+                await updateBatchPreview();
+            } catch (e) { showModal('Error', e.message); }
         }
 
         // ============================================================
