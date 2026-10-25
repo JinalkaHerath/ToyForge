@@ -1604,6 +1604,13 @@
         .batch-source-pill.comp { background: rgba(255, 199, 95, 0.15); color: var(--warning); }
         .batch-source-pill.printed { background: rgba(0, 201, 167, 0.15); color: var(--success); }
     </style>
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6C63FF">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="ToyForge">
 </head>
 <body>
     <!-- Header -->
@@ -7294,6 +7301,15 @@
             console.log('ToyForge Dashboard initialized with Assembly BOM Tracking');
             console.log('Available BOMs:', Object.keys(ASSEMBLY_BOM));
         };
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js').catch(function (err) {
+                    console.warn('Service worker registration failed:', err);
+                });
+            });
+        }
     </script>
 </body>
 </html>
