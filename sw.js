@@ -1,4 +1,4 @@
-const CACHE = 'toyforge-v1';
+const CACHE = 'toyforge-v2';
 const SHELL = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -16,7 +16,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
-  // Only handle same-origin files; Firebase/CDN requests go straight to the network
+  // Only handle files from this site; Firebase and CDN requests go straight to the network
   if (url.origin !== location.origin) return;
-  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+  e.respondWith(
+    fetch(e.request, { cache: 'no-cache' }).catch(() => caches.match(e.request))
+  );
 });
