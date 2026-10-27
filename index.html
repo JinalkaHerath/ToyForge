@@ -1672,6 +1672,7 @@
             <button class="menu-item" onclick="openFilamentPortal()">
                 <i class="fas fa-reel"></i>
                 <span>Filament Tracker</span>
+                <span id="pwPendingBadge" title="Finished prints from Print Wall waiting for confirmation" style="display:none;margin-left:auto;min-width:22px;padding:2px 7px;border-radius:999px;background:var(--warning, #ffc75f);color:#1b1b1b;font-size:12px;font-weight:700;text-align:center;"></span>
             </button>
             <button class="menu-item" onclick="openRDComponentsPortal()">
                 <i class="fas fa-flask"></i>
@@ -2899,6 +2900,23 @@
                 <div class="portal-header">
                     <div class="portal-title"><i class="fas fa-print"></i><span>Print Room / Filament Tracker</span></div>
                     <button class="back-button" onclick="closeWorkflowPortal('filamentManagementPortal')"><i class="fas fa-arrow-left"></i> Back to Dashboard</button>
+                </div>
+
+                <div class="supplier-form-section" id="pwPendingSection">
+                    <div class="form-header"><i class="fas fa-satellite-dish"></i><span>Finished prints from Print Wall — waiting for confirmation <span id="pwPendingCount" style="color:var(--text-secondary);"></span></span></div>
+                    <p style="margin:0 0 14px;color:var(--text-secondary);font-size:13px;">
+                        Print Wall sends every successfully finished print here. Check the part, colour and count, then press <strong>Confirm</strong>:
+                        only then is it added to the printing records and the filament deducted from stock. <strong>Dismiss</strong> removes a print without counting it.
+                        The part and count chosen for a file are remembered for the next time that file is printed.
+                    </p>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="employee-table">
+                                <thead><tr><th>Finished</th><th>Printer / File</th><th>Printed Part</th><th>Color</th><th>Printed</th><th>Damaged</th><th>Filament (g)</th><th></th></tr></thead>
+                                <tbody id="pwPendingBody"><tr><td colspan="8" class="loading"><p>Loading...</p></td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="supplier-form-section">
@@ -6091,6 +6109,166 @@
                 console.error(e);
             }
         }
+
+
+        // ============================================================
+        // PRINT WALL LINK: finished prints waiting for confirmation
+        // Print Wall writes each successfully finished print to printwall_pending_prints.
+        // Nothing is counted until it is confirmed here; confirming adds a normal
+        // filament_printing_daily_data record (and deducts the filament), exactly like
+        // "Record Today's Printing". printwall_file_map remembers the part per file.
+        // ============================================================
+        let pwPending = {};
+        let pwFileMap = {};
+        let pwWatching = false;
+
+        const pwEsc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        const pwKey = (file) => String(file || '').toLowerCase().replace(/[.#$\[\]\/]/g, '_').slice(0, 200) || 'unknown';
+
+        // The part for a print: remembered for this file, else the closest match to the object or file names
+        function pwGuess(entry) {
+            const remembered = pwFileMap[pwKey(entry.file)];
+            if (remembered && PRINTED_PARTS.includes(remembered.part)) return remembered;
+            const norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+            const names = [...Object.keys(entry.objects || {}), entry.file].map(norm);
+            let best = null, bestScore = 0;
+            PRINTED_PARTS.forEach(part => {
+                const words = norm(part).split(' ').filter(w => w.length > 2);
+                if (!words.length) return;
+                names.forEach(n => {
+                    const score = words.filter(w => n.includes(w)).length / words.length;
+                    if (score > bestScore) { bestScore = score; best = part; }
+                });
+            });
+            return bestScore >= 0.5 ? { part: best } : null;
+        }
+
+        function renderPwPending() {
+            const entries = Object.entries(pwPending || {}).filter(([, e]) => e && e.status === 'pending')
+                .sort((a, b) => String(b[1].finishedAt).localeCompare(String(a[1].finishedAt)));
+            const badge = document.getElementById('pwPendingBadge');
+            if (badge) { badge.textContent = entries.length; badge.style.display = entries.length ? 'inline-block' : 'none'; }
+            const count = document.getElementById('pwPendingCount');
+            if (count) count.textContent = entries.length ? `(${entries.length})` : '';
+            const body = document.getElementById('pwPendingBody');
+            if (!body) return;
+            if (!entries.length) {
+                body.innerHTML = '<tr><td colspan="8" class="loading"><p>No finished prints waiting. They appear here automatically when a print finishes.</p></td></tr>';
+                return;
+            }
+            body.innerHTML = entries.map(([id, e]) => {
+                const guess = pwGuess(e) || {};
+                const color = e.color || guess.color || '';
+                const printed = e.count || guess.count || 1;
+                const when = new Date(e.finishedAt);
+                const objects = e.objects ? Object.entries(e.objects).map(([n, q]) => `${q} × ${n}`).join(', ') : '';
+                const swatch = e.colorHex ? `<span title="#${pwEsc(e.colorHex)}" style="display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid var(--border-color,#555);background:#${pwEsc(e.colorHex)};vertical-align:middle;margin-right:6px;"></span>` : '';
+                const partOptions = ['<option value="">Select part</option>']
+                    .concat(PRINTED_PARTS.map(p => `<option value="${pwEsc(p)}"${p === guess.part ? ' selected' : ''}>${pwEsc(p)}</option>`)).join('');
+                return `<tr data-pw-id="${pwEsc(id)}">
+                    <td>${when.toLocaleDateString()}<br><small style="color:var(--text-secondary);">${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></td>
+                    <td><strong>${pwEsc(e.printer)}</strong><br><small style="color:var(--text-secondary);">${pwEsc(e.file)}${e.plate > 1 ? ' · plate ' + pwEsc(e.plate) : ''}</small>
+                        ${objects ? `<br><small style="color:var(--text-secondary);">On the plate: ${pwEsc(objects)}</small>` : ''}</td>
+                    <td><select class="form-select pw-part" style="min-width:180px;">${partOptions}</select></td>
+                    <td>${swatch}<select class="form-select pw-color" style="display:inline-block;width:auto;">
+                        <option value="">Select</option><option value="black"${color === 'black' ? ' selected' : ''}>Black</option><option value="white"${color === 'white' ? ' selected' : ''}>White</option></select></td>
+                    <td><input class="form-input pw-printed" type="number" min="0" step="1" value="${Number(printed) || 0}" style="width:80px;"></td>
+                    <td><input class="form-input pw-damaged" type="number" min="0" step="1" value="0" style="width:80px;"></td>
+                    <td><input class="form-input pw-grams" type="number" min="0" step="0.1" value="${e.grams != null ? Number(e.grams) : ''}" placeholder="0.0" style="width:90px;"></td>
+                    <td style="white-space:nowrap;">
+                        <button class="action-btn add-btn" onclick="confirmPrintWallPrint('${pwEsc(id)}')"><i class="fas fa-check"></i> Confirm</button>
+                        <button class="action-btn delete-btn" onclick="dismissPrintWallPrint('${pwEsc(id)}')"><i class="fas fa-xmark"></i> Dismiss</button>
+                    </td></tr>`;
+            }).join('');
+        }
+
+        async function startPrintWallWatch() {
+            if (pwWatching) return;
+            const database = window.firebaseDatabase;
+            if (!database) { setTimeout(startPrintWallWatch, 1000); return; }
+            pwWatching = true;
+            const { ref, onValue } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+            try { await syncPrintedPartsMaster(); } catch (e) { console.error(e); }
+            onValue(ref(database, 'printwall_file_map'), snap => { pwFileMap = snap.exists() ? snap.val() : {}; renderPwPending(); });
+            onValue(ref(database, 'printwall_pending_prints'), snap => { pwPending = snap.exists() ? snap.val() : {}; renderPwPending(); });
+        }
+
+        async function confirmPrintWallPrint(id) {
+            const row = document.querySelector(`#pwPendingBody tr[data-pw-id="${CSS.escape(id)}"]`);
+            const entry = pwPending[id];
+            if (!row || !entry) return;
+            const part = row.querySelector('.pw-part').value;
+            const color = row.querySelector('.pw-color').value;
+            const printed = Number(row.querySelector('.pw-printed').value || 0);
+            const damaged = Number(row.querySelector('.pw-damaged').value || 0);
+            const grams = Number(row.querySelector('.pw-grams').value || 0);
+            if (!part) { showModal('Error', 'Select the printed part.'); return; }
+            if (color !== 'black' && color !== 'white') { showModal('Error', 'Select Black or White.'); return; }
+            if (![printed, damaged, grams].every(n => Number.isFinite(n) && n >= 0) || !Number.isInteger(printed) || !Number.isInteger(damaged)) {
+                showModal('Error', 'Counts must be whole numbers of 0 or more, and grams 0 or more.'); return;
+            }
+            if (printed + damaged <= 0) { showModal('Error', 'Enter at least one printed or damaged part.'); return; }
+            const buttons = row.querySelectorAll('button');
+            buttons.forEach(b => b.disabled = true);
+            try {
+                const database = window.firebaseDatabase;
+                const { ref, get, update, push } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                // someone else may have confirmed it a moment ago
+                const still = await get(ref(database, `printwall_pending_prints/${id}`));
+                if (!still.exists()) { showModal('Info', 'This print was already confirmed or dismissed.'); return; }
+
+                const { byColor } = await getPrintRoomFilaments();
+                const black = chooseFilament(byColor, 'black');
+                const white = chooseFilament(byColor, 'white');
+                const updates = {};
+                if (grams > 0) {
+                    const item = color === 'black' ? black : white;
+                    const label = color === 'black' ? 'Black' : 'White';
+                    if (!item) throw new Error(`${label} PLA component not found`);
+                    const [cid, c] = item;
+                    const current = Number(c.quantity);
+                    if (!Number.isFinite(current)) throw new Error(`${label} PLA quantity is not numeric`);
+                    if (grams > current) throw new Error(`${label} PLA stock insufficient. Remaining: ${current} g`);
+                    updates[`component_data/${cid}/quantity`] = current - grams;
+                    stampQuantityHistory(updates, cid, current, current - grams);
+                }
+                const isBlack = color === 'black';
+                const key = push(ref(database, 'filament_printing_daily_data')).key;
+                updates[`filament_printing_daily_data/${key}`] = {
+                    date: entry.date || localDateISO(), timestamp: new Date().toISOString(),
+                    parts: { [part]: { blackPrinted: isBlack ? printed : 0, blackDamaged: isBlack ? damaged : 0,
+                        whitePrinted: isBlack ? 0 : printed, whiteDamaged: isBlack ? 0 : damaged } },
+                    blackFilamentUsed: isBlack ? grams : 0, whiteFilamentUsed: isBlack ? 0 : grams,
+                    blackFilamentComponentId: black ? black[0] : '', whiteFilamentComponentId: white ? white[0] : '',
+                    source: 'printwall', printer: entry.printer || '', file: entry.file || '', finishedAt: entry.finishedAt || ''
+                };
+                updates[`printwall_pending_prints/${id}`] = null;
+                updates[`printwall_file_map/${pwKey(entry.file)}`] = { part, color, count: printed + damaged, file: entry.file || '' };
+                await update(ref(database), updates);
+                showModal('Success', `${printed} × ${part} (${isBlack ? 'Black' : 'White'}) added to the printing records` +
+                    (entry.date && entry.date !== localDateISO() ? ` for ${entry.date}` : '') + '.');
+                await loadTodayPrintingData();
+                await refreshPrintRoomFilamentStock();
+                if (document.getElementById('productComponentsManagementPortal')?.style.display !== 'none') await loadProductComponentsData();
+            } catch (e) {
+                showModal('Error', e.message);
+                console.error(e);
+            } finally {
+                buttons.forEach(b => b.disabled = false);
+            }
+        }
+
+        async function dismissPrintWallPrint(id) {
+            const entry = pwPending[id];
+            if (!entry) return;
+            if (!confirm(`Dismiss ${entry.file} from ${entry.printer}? It will not be counted.`)) return;
+            try {
+                const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                await update(ref(window.firebaseDatabase), { [`printwall_pending_prints/${id}`]: null });
+            } catch (e) { showModal('Error', e.message); }
+        }
+
+        window.addEventListener('load', () => setTimeout(startPrintWallWatch, 300));
 
         async function openFilamentPortal() {
             hideAllPortals();
