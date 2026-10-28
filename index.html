@@ -2440,11 +2440,11 @@
                             </div>
                             <div class="form-group">
                                 <label for="componentNameInput">Name</label>
-                                <input type="text" id="componentNameInput" class="form-input" onblur="updateComponentIdPreview()">
+                                <input type="text" id="componentNameInput" class="form-input" onblur="updateComponentIdPreview()" oninput="updateComponentFilamentWeightLabel()">
                             </div>
                             <div class="form-group">
                                 <label for="componentSectionInput">Section</label>
-                                <select id="componentSectionInput" class="form-select" onchange="loadComponentCategoryOptions()">
+                                <select id="componentSectionInput" class="form-select" onchange="loadComponentCategoryOptions(); updateComponentFilamentWeightLabel()">
                                     <option value="">Select Section</option>
                                     <option value="Production">Production</option>
                                     <option value="Packaging">Packaging</option>
@@ -2456,19 +2456,25 @@
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="componentCategoryInput">Category</label>
-                                <select id="componentCategoryInput" class="form-select" onchange="loadComponentSubCategoryOptions()">
+                                <select id="componentCategoryInput" class="form-select" onchange="loadComponentSubCategoryOptions(); updateComponentFilamentWeightLabel()">
                                     <option value="">Select Category</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label for="componentSubCategoryInput">Sub Category</label>
-                                <select id="componentSubCategoryInput" class="form-select">
+                                <select id="componentSubCategoryInput" class="form-select" onchange="updateComponentFilamentWeightLabel()">
                                     <option value="">Select Sub Category</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label for="componentQuantityInput">Quantity in Stock</label>
-                                <input type="number" id="componentQuantityInput" class="form-input">
+                                <input type="number" id="componentQuantityInput" class="form-input" step="any" oninput="updateComponentFilamentWeightLabel()">
+                                <small id="componentFilamentWeightLabel" style="color:var(--text-secondary);"></small>
+                            </div>
+                            <div class="form-group" id="componentRollWeightGroup" style="display:none;">
+                                <label for="componentRollWeightInput">Filament Weight per Roll (g)</label>
+                                <input type="number" id="componentRollWeightInput" class="form-input" min="1" step="any" placeholder="1000" oninput="updateComponentFilamentWeightLabel()">
+                                <small style="color:var(--text-secondary);">For Print room PLA/filament: quantity = number of rolls.</small>
                             </div>
                             <div class="form-group">
                                 <label for="componentOrderedQuantityInput">Ordered Quantity (on order, not yet received)</label>
@@ -2905,10 +2911,21 @@
                 <div class="supplier-form-section" id="pwPendingSection">
                     <div class="form-header"><i class="fas fa-satellite-dish"></i><span>Finished prints from Print Wall — waiting for confirmation <span id="pwPendingCount" style="color:var(--text-secondary);"></span></span></div>
                     <p style="margin:0 0 14px;color:var(--text-secondary);font-size:13px;">
-                        Print Wall sends every successfully finished print here. Check the part, colour and count, then press <strong>Confirm</strong>:
-                        only then is it added to the printing records and the filament deducted from stock. <strong>Dismiss</strong> removes a print without counting it.
+                        Print Wall keeps every successfully finished print with the number of parts printed, and they appear here automatically.
+                        Check the part, colour and count, then press <strong>Confirm</strong>: only then is the count added to the printing records
+                        (and the filament, from the part's weight per piece, deducted from stock). <strong>Dismiss</strong> removes a print without counting it.
                         The part and count chosen for a file are remembered for the next time that file is printed.
                     </p>
+                    <div class="form-row" style="align-items:flex-end;margin-bottom:6px;">
+                        <div class="form-group" style="flex:2;">
+                            <label for="pwAddressInput">Print Wall address (shown in Print Wall → Manage → Filament Tracker)</label>
+                            <input id="pwAddressInput" type="text" class="form-input" placeholder="http://192.168.1.20:3000" autocomplete="off" spellcheck="false">
+                        </div>
+                        <div class="form-group" style="flex:0 0 auto;">
+                            <button class="action-btn add-btn" onclick="savePrintWallAddress()"><i class="fas fa-link"></i> Connect</button>
+                        </div>
+                    </div>
+                    <p id="pwLinkStatus" style="margin:0 0 14px;font-size:13px;color:var(--text-secondary);"></p>
                     <div class="table-container">
                         <div class="table-wrapper">
                             <table class="employee-table">
@@ -2931,10 +2948,12 @@
                                 <thead>
                                     <tr>
                                         <th>Printed Part</th>
+                                        <th>Weight / Piece (g)</th>
                                         <th>Black Printed</th>
                                         <th>Black Damaged</th>
                                         <th>White Printed</th>
                                         <th>White Damaged</th>
+                                        <th>Filament for Row</th>
                                     </tr>
                                 </thead>
                                 <tbody id="printPartsTrackerBody"></tbody>
@@ -2944,13 +2963,13 @@
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Black PLA Used Today (g)</label>
-                            <input id="blackFilamentUsedInput" type="number" min="0" step="0.1" class="form-input" placeholder="0.0">
+                            <label>Black PLA Used (g) — auto-calculated</label>
+                            <input id="blackFilamentUsedInput" type="number" min="0" step="0.1" class="form-input" placeholder="0.0" readonly style="opacity:0.85;">
                             <small id="blackFilamentStockLabel" style="color:var(--text-secondary);"></small>
                         </div>
                         <div class="form-group">
-                            <label>White PLA Used Today (g)</label>
-                            <input id="whiteFilamentUsedInput" type="number" min="0" step="0.1" class="form-input" placeholder="0.0">
+                            <label>White PLA Used (g) — auto-calculated</label>
+                            <input id="whiteFilamentUsedInput" type="number" min="0" step="0.1" class="form-input" placeholder="0.0" readonly style="opacity:0.85;">
                             <small id="whiteFilamentStockLabel" style="color:var(--text-secondary);"></small>
                         </div>
                         <div class="form-group">
@@ -2963,8 +2982,11 @@
                         <button class="action-btn add-btn" onclick="recordDailyPrinting()"><i class="fas fa-save"></i> Record Today's Printing</button>
                         <button class="action-btn clear-btn" onclick="clearDailyPrintingForm()"><i class="fas fa-broom"></i> Clear</button>
                     </div>
+                    <div id="dailyFilamentWarning" style="display:none;margin-top:12px;color:var(--warning);font-size:13px;"></div>
                     <p style="margin-top:12px;color:var(--text-secondary);font-size:13px;">
-                        <strong>Important:</strong> enter filament usage in grams. When the record is saved, the corresponding Black/White PLA quantity is deducted from the Print room filament component in the Components Portal.
+                        <strong>How it works:</strong> set each part's <em>Weight / Piece</em> once (it is saved automatically).
+                        Filament used = (printed + damaged) × weight per piece, per colour. When the record is saved, that weight is
+                        converted to rolls (using the roll weight set in the Components Portal) and deducted from the Black/White PLA stock.
                     </p>
                 </div>
 
@@ -2980,7 +3002,7 @@
                     <div class="table-container">
                         <div class="table-wrapper">
                             <table class="employee-table">
-                                <thead><tr><th>Color</th><th>Filament Component</th><th>Remaining</th><th>Location</th></tr></thead>
+                                <thead><tr><th>Color</th><th>Filament Component</th><th>Remaining Rolls</th><th>Remaining Weight</th><th>Weight / Roll</th><th>Location</th></tr></thead>
                                 <tbody id="printRoomFilamentStockBody"></tbody>
                             </table>
                         </div>
@@ -4299,6 +4321,74 @@
             return 'q' + Date.now() + Math.random().toString(36).slice(2, 6);
         }
 
+        // ---- Filament stock: quantity is a count of ROLLS; each roll has a weight in grams ----
+        const DEFAULT_FILAMENT_ROLL_WEIGHT_G = 1000;
+
+        function isFilamentComponent(c) {
+            if (!c || String(c.section || '').trim().toLowerCase() !== 'print room') return false;
+            const text = [c.name, c.category, c.subCategory].map(v => String(v || '').toLowerCase()).join(' ');
+            return text.includes('filament') || text.includes('pla');
+        }
+
+        function filamentRollWeight(c) {
+            const w = parseFloat(c && c.rollWeightGrams);
+            return Number.isFinite(w) && w > 0 ? w : DEFAULT_FILAMENT_ROLL_WEIGHT_G;
+        }
+
+        function filamentGramsInStock(c) {
+            const rolls = quantityToNumber(c && c.quantity);
+            return (Number.isFinite(rolls) ? rolls : 0) * filamentRollWeight(c);
+        }
+
+        function formatGrams(g) {
+            const n = Number(g) || 0;
+            return n.toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' g';
+        }
+
+        function formatRolls(r) {
+            const n = Math.round((Number(r) || 0) * 1000) / 1000;
+            return `${n} roll${n === 1 ? '' : 's'}`;
+        }
+
+        // Deduct a weight in grams from a filament component whose quantity is in rolls.
+        // Adds the change to `updates` and returns the new roll count.
+        function deductFilamentGrams(updates, item, grams, label) {
+            const [id, c] = item;
+            const rolls = Number(c.quantity);
+            if (!Number.isFinite(rolls)) throw new Error(`${label} PLA quantity is not numeric`);
+            const perRoll = filamentRollWeight(c);
+            const available = rolls * perRoll;
+            if (grams > available + 1e-6) {
+                throw new Error(`${label} PLA stock insufficient. Need ${formatGrams(grams)}, remaining ${formatGrams(available)} (${formatRolls(rolls)}).`);
+            }
+            const newRolls = Math.max(0, Math.round((rolls - grams / perRoll) * 1000) / 1000);
+            updates[`component_data/${id}/quantity`] = newRolls;
+            stampQuantityHistory(updates, id, rolls, newRolls);
+            return newRolls;
+        }
+
+        function componentFormLooksLikeFilament() {
+            return isFilamentComponent({
+                section: document.getElementById('componentSectionInput').value,
+                name: document.getElementById('componentNameInput').value,
+                category: document.getElementById('componentCategoryInput').value,
+                subCategory: document.getElementById('componentSubCategoryInput').value
+            });
+        }
+
+        // Live "5 rolls × 1000 g = 5000 g" helper under Quantity in Stock
+        function updateComponentFilamentWeightLabel() {
+            const group = document.getElementById('componentRollWeightGroup');
+            const label = document.getElementById('componentFilamentWeightLabel');
+            if (!group || !label) return;
+            const isFil = componentFormLooksLikeFilament();
+            group.style.display = isFil ? '' : 'none';
+            if (!isFil) { label.textContent = ''; return; }
+            const rolls = parseFloat(document.getElementById('componentQuantityInput').value) || 0;
+            const perRoll = filamentRollWeight({ rollWeightGrams: document.getElementById('componentRollWeightInput').value });
+            label.textContent = `${formatRolls(rolls)} × ${formatGrams(perRoll)} = ${formatGrams(rolls * perRoll)} of filament`;
+        }
+
         function formatEditDate(iso) {
             const d = new Date(iso);
             return isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -4416,7 +4506,10 @@
             const dateLine = c && c.quantityUpdatedAt
                 ? `<div style="font-size:11px;color:var(--text-secondary);">as of ${escapeHTML(formatEditDate(c.quantityUpdatedAt))}</div>`
                 : `<div style="font-size:11px;color:var(--text-secondary);">&mdash;</div>`;
-            return `<td>${qty}${dateLine}</td>`;
+            const weightLine = isFilamentComponent(c)
+                ? `<div style="font-size:11px;color:var(--accent);" title="${escapeHTML(formatGrams(filamentRollWeight(c)))} per roll">≈ ${escapeHTML(formatGrams(filamentGramsInStock(c)))}</div>`
+                : '';
+            return `<td>${qty}${isFilamentComponent(c) ? ' rolls' : ''}${weightLine}${dateLine}</td>`;
         }
 
         const COMPONENT_PORTAL_SECTIONS = new Set(['production', 'packaging', 'print room', 'assembly']);
@@ -4494,6 +4587,7 @@
                 document.getElementById('componentCategoryInput').value = c.category || '';
                 loadComponentSubCategoryOptions().then(() => {
                     document.getElementById('componentSubCategoryInput').value = c.subCategory || '';
+                    updateComponentFilamentWeightLabel();
                 });
             });
             document.getElementById('componentQuantityInput').value = c.quantity || '';
@@ -4504,6 +4598,8 @@
             document.getElementById('componentReorderInput').value = c.reorderLevel || '';
             document.getElementById('componentLocationInput').value = c.location || '';
             document.getElementById('componentDatasheetInput').value = c.datasheet || '';
+            document.getElementById('componentRollWeightInput').value = c.rollWeightGrams || '';
+            updateComponentFilamentWeightLabel();
         }
 
         async function updateComponentIdPreview() {
@@ -4601,9 +4697,14 @@
         }
 
         function readComponentForm() {
+            const rollWeight = parseFloat(document.getElementById('componentRollWeightInput').value);
             return {
                 id: document.getElementById('componentIdInput').value.trim(),
                 data: {
+                    // Only filament components carry a roll weight (null removes it from others)
+                    rollWeightGrams: componentFormLooksLikeFilament()
+                        ? (Number.isFinite(rollWeight) && rollWeight > 0 ? rollWeight : DEFAULT_FILAMENT_ROLL_WEIGHT_G)
+                        : null,
                     name: document.getElementById('componentNameInput').value.trim(),
                     section: document.getElementById('componentSectionInput').value,
                     category: document.getElementById('componentCategoryInput').value,
@@ -4631,6 +4732,7 @@
                 const { ref, get, set } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
                 const compRef = ref(database, `component_data/${id}`);
                 if ((await get(compRef)).exists()) { showModal('Error', 'Component already exists'); return; }
+                if (data.rollWeightGrams == null) delete data.rollWeightGrams;
                 const startQty = quantityToNumber(data.quantity);
                 if (Number.isFinite(startQty) && startQty > 0) {
                     const at = new Date().toISOString();
@@ -4720,8 +4822,9 @@
         function clearComponentForm() {
             ['componentIdInput','componentNameInput','componentSectionInput','componentCategoryInput',
              'componentSubCategoryInput','componentQuantityInput','componentOrderedQuantityInput','componentSupplierInput',
-             'componentReorderInput','componentLocationInput','componentDatasheetInput'].forEach(id => 
+             'componentReorderInput','componentLocationInput','componentDatasheetInput','componentRollWeightInput'].forEach(id =>
                 document.getElementById(id).value = '');
+            updateComponentFilamentWeightLabel();
             if (selectedComponentRow) { selectedComponentRow.style.backgroundColor = ''; selectedComponentRow = null; }
             selectedComponentId = null;
             if (componentHistoryFilterId !== null) { componentHistoryFilterId = null; renderComponentHistory(); }
@@ -4906,6 +5009,12 @@
                     });
                     updates['printed_parts_master'] = updatedList;
                     updates[`product_components_manual_data/${selectedPrintedPartName}`] = null;
+                    // Move the saved weight per piece to the new name
+                    const oldW = getPartWeight(selectedPrintedPartName);
+                    if (oldW > 0 && partWeightKey(newName) !== partWeightKey(selectedPrintedPartName)) {
+                        updates[`printed_part_weights/${partWeightKey(newName)}`] = { part: newName, grams: oldW, updatedAt: new Date().toISOString() };
+                        updates[`printed_part_weights/${partWeightKey(selectedPrintedPartName)}`] = null;
+                    }
                     PRINTED_PARTS = updatedList;
                 }
 
@@ -5907,19 +6016,107 @@
             'L Bracket', 'Octo Head Support', 'Name Plates', 'Power Input Plates', 'Lid LED Cap'
         ];
 
+        // ---- Weight (grams of filament) per printed piece, saved in Firebase: printed_part_weights ----
+        let PRINTED_PART_WEIGHTS = {};
+        const partWeightKey = (part) => String(part || '').toLowerCase().replace(/[.#$\[\]\/]/g, '_').slice(0, 200) || 'unknown';
+
+        function getPartWeight(part) {
+            const w = Number(PRINTED_PART_WEIGHTS[partWeightKey(part)]?.grams);
+            return Number.isFinite(w) && w > 0 ? w : 0;
+        }
+
+        async function loadPrintedPartWeights() {
+            try {
+                const database = window.firebaseDatabase;
+                if (!database) return;
+                const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                const snap = await get(ref(database, 'printed_part_weights'));
+                PRINTED_PART_WEIGHTS = snap.exists() ? snap.val() : {};
+            } catch (e) { console.error(e); }
+        }
+
+        async function savePrintedPartWeight(part, grams) {
+            const g = Number(grams);
+            if (!Number.isFinite(g) || g < 0) { showModal('Error', 'Weight per piece must be 0 or more grams.'); return; }
+            const key = partWeightKey(part);
+            const value = g > 0 ? { part, grams: g, updatedAt: new Date().toISOString() } : null;
+            try {
+                const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                await update(ref(window.firebaseDatabase), { [`printed_part_weights/${key}`]: value });
+                if (value) PRINTED_PART_WEIGHTS[key] = value; else delete PRINTED_PART_WEIGHTS[key];
+                renderPwPending();
+            } catch (e) { showModal('Error', e.message); console.error(e); }
+        }
+
         function buildPrintPartRows() {
             const body = document.getElementById('printPartsTrackerBody');
             if (!body) return;
             body.innerHTML = PRINTED_PARTS.map((part, i) => {
                 const safe = part;
+                const w = getPartWeight(part);
                 return `<tr>
                     <td><strong>${safe}</strong></td>
+                    <td><input class="form-input part-weight" data-part-index="${i}" type="number" min="0" step="0.1" value="${w || ''}" placeholder="g" title="Grams of filament for one piece (save happens automatically)" style="min-width:80px;"></td>
                     <td><input class="form-input print-count black-printed" data-part-index="${i}" type="number" min="0" step="1" value="0"></td>
                     <td><input class="form-input print-count black-damaged" data-part-index="${i}" type="number" min="0" step="1" value="0"></td>
                     <td><input class="form-input print-count white-printed" data-part-index="${i}" type="number" min="0" step="1" value="0"></td>
                     <td><input class="form-input print-count white-damaged" data-part-index="${i}" type="number" min="0" step="1" value="0"></td>
+                    <td class="row-filament" data-part-index="${i}" style="white-space:nowrap;color:var(--text-secondary);">—</td>
                 </tr>`;
             }).join('');
+            if (!body.dataset.listening) {
+                body.dataset.listening = '1';
+                body.addEventListener('input', recalcDailyFilament);
+                body.addEventListener('change', (ev) => {
+                    const t = ev.target;
+                    if (t && t.classList.contains('part-weight')) {
+                        const part = PRINTED_PARTS[Number(t.dataset.partIndex)];
+                        if (part) savePrintedPartWeight(part, t.value || 0);
+                    }
+                });
+            }
+            recalcDailyFilament();
+        }
+
+        // Filament used = (printed + damaged) × weight per piece, for each colour
+        function calcDailyFilament() {
+            let black = 0, white = 0;
+            const missing = [];
+            const rows = PRINTED_PARTS.map((part, i) => {
+                const val = cls => Number(document.querySelector(`#printPartsTrackerBody .${cls}[data-part-index="${i}"]`)?.value || 0);
+                const w = val('part-weight');
+                const bPieces = val('black-printed') + val('black-damaged');
+                const wPieces = val('white-printed') + val('white-damaged');
+                if ((bPieces + wPieces) > 0 && !(w > 0)) missing.push(part);
+                const bG = bPieces * (w > 0 ? w : 0), wG = wPieces * (w > 0 ? w : 0);
+                black += bG; white += wG;
+                return { i, w, bPieces, wPieces, bG, wG };
+            });
+            return { black: Math.round(black * 10) / 10, white: Math.round(white * 10) / 10, missing, rows };
+        }
+
+        function recalcDailyFilament() {
+            const { black, white, missing, rows } = calcDailyFilament();
+            rows.forEach(r => {
+                const cell = document.querySelector(`#printPartsTrackerBody .row-filament[data-part-index="${r.i}"]`);
+                if (!cell) return;
+                if (r.bPieces + r.wPieces <= 0) { cell.textContent = '—'; cell.style.color = 'var(--text-secondary)'; return; }
+                if (!(r.w > 0)) { cell.textContent = 'Set weight'; cell.style.color = 'var(--warning)'; return; }
+                const segs = [];
+                if (r.bPieces) segs.push(`Black ${formatGrams(r.bG)}`);
+                if (r.wPieces) segs.push(`White ${formatGrams(r.wG)}`);
+                cell.textContent = segs.join(' · ');
+                cell.style.color = '';
+            });
+            const bIn = document.getElementById('blackFilamentUsedInput');
+            const wIn = document.getElementById('whiteFilamentUsedInput');
+            if (bIn) bIn.value = black ? black.toFixed(1) : '';
+            if (wIn) wIn.value = white ? white.toFixed(1) : '';
+            const warn = document.getElementById('dailyFilamentWarning');
+            if (warn) {
+                warn.style.display = missing.length ? 'block' : 'none';
+                warn.innerHTML = missing.length ? `<i class="fas fa-triangle-exclamation"></i> Enter the <strong>Weight / Piece</strong> for: ${missing.map(m => escapeHTML(m)).join(', ')}` : '';
+            }
         }
 
         async function getPrintRoomFilaments() {
@@ -5951,7 +6148,7 @@
             const blackLabel = document.getElementById('blackFilamentStockLabel');
             const whiteLabel = document.getElementById('whiteFilamentStockLabel');
             if (!body) return;
-            body.innerHTML = '<tr><td colspan="4" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
+            body.innerHTML = '<tr><td colspan="6" class="loading"><div class="spinner"></div><p>Loading...</p></td></tr>';
             try {
                 const { byColor } = await getPrintRoomFilaments();
                 const black = chooseFilament(byColor, 'black');
@@ -5959,29 +6156,29 @@
                 const rows = [];
                 [['Black', black], ['White', white]].forEach(([color, item]) => {
                     if (!item) {
-                        rows.push(`<tr><td>${color}</td><td colspan="3">No Print room PLA component found</td></tr>`);
+                        rows.push(`<tr><td>${color}</td><td colspan="5">No Print room PLA component found</td></tr>`);
                         return;
                     }
                     const [id, c] = item;
-                    rows.push(`<tr><td>${color}</td><td>${c.name || id}</td><td>${c.quantity ?? 0} g</td><td>${c.location || ''}</td></tr>`);
+                    rows.push(`<tr><td>${color}</td><td>${c.name || id}</td><td>${formatRolls(c.quantity)}</td>
+                        <td><strong>${formatGrams(filamentGramsInStock(c))}</strong></td><td>${formatGrams(filamentRollWeight(c))}</td><td>${c.location || ''}</td></tr>`);
                 });
                 body.innerHTML = rows.join('');
-                if (blackLabel) blackLabel.textContent = black ? `Current stock: ${black[1]?.quantity ?? 0} g` : 'No Black PLA';
-                if (whiteLabel) whiteLabel.textContent = white ? `Current stock: ${white[1]?.quantity ?? 0} g` : 'No White PLA';
+                const stockText = item => `Current stock: ${formatRolls(item[1]?.quantity)} ≈ ${formatGrams(filamentGramsInStock(item[1]))}`;
+                if (blackLabel) blackLabel.textContent = black ? stockText(black) : 'No Black PLA';
+                if (whiteLabel) whiteLabel.textContent = white ? stockText(white) : 'No White PLA';
             } catch (e) {
-                body.innerHTML = '<tr><td colspan="4" class="loading"><p>Error loading</p></td></tr>';
+                body.innerHTML = '<tr><td colspan="6" class="loading"><p>Error loading</p></td></tr>';
                 console.error(e);
             }
         }
 
         function clearDailyPrintingForm() {
-            document.querySelectorAll('#printPartsTrackerBody input').forEach(input => input.value = '0');
-            const black = document.getElementById('blackFilamentUsedInput');
-            const white = document.getElementById('whiteFilamentUsedInput');
-            if (black) black.value = '';
-            if (white) white.value = '';
+            // Reset the counts only — the saved weight per piece stays
+            document.querySelectorAll('#printPartsTrackerBody input.print-count').forEach(input => input.value = '0');
             const date = document.getElementById('filamentPrintDateInput');
             if (date) date.value = localDateISO();
+            recalcDailyFilament();
         }
 
         function collectDailyPrintingRecord() {
@@ -5991,10 +6188,11 @@
                 const get = cls => Number(document.querySelector(`#printPartsTrackerBody .${cls}[data-part-index="${i}"]`)?.value || 0);
                 parts[part] = { blackPrinted: get('black-printed'), blackDamaged: get('black-damaged'),
                     whitePrinted: get('white-printed'), whiteDamaged: get('white-damaged') };
+                const w = get('part-weight');
+                if (w > 0) parts[part].gramsPerPiece = w;
             });
-            const blackFilamentUsed = Number(document.getElementById('blackFilamentUsedInput')?.value || 0);
-            const whiteFilamentUsed = Number(document.getElementById('whiteFilamentUsedInput')?.value || 0);
-            return { date, parts, blackFilamentUsed, whiteFilamentUsed };
+            const calc = calcDailyFilament();
+            return { date, parts, blackFilamentUsed: calc.black, whiteFilamentUsed: calc.white, missingWeights: calc.missing };
         }
 
         function dailyTotals(record) {
@@ -6065,10 +6263,11 @@
                     showModal('Error', 'Enter at least one printed or damaged part.');
                     return;
                 }
-                if (record.blackFilamentUsed < 0 || record.whiteFilamentUsed < 0) {
-                    showModal('Error', 'Filament usage cannot be negative.');
+                if (record.missingWeights.length) {
+                    showModal('Error', `Enter the Weight / Piece (g) for: ${record.missingWeights.join(', ')}`);
                     return;
                 }
+                delete record.missingWeights;
 
                 const database = window.firebaseDatabase;
                 if (!database) throw new Error('Firebase database not initialized');
@@ -6080,24 +6279,24 @@
                 if (record.whiteFilamentUsed > 0 && !white) throw new Error('White PLA component not found');
 
                 const updates = {};
+                const rollsUsed = { Black: 0, White: 0 };
                 for (const [color, amount, item] of [['Black', record.blackFilamentUsed, black], ['White', record.whiteFilamentUsed, white]]) {
                     if (!amount) continue;
-                    const [id, c] = item;
-                    const current = Number(c.quantity);
-                    if (!Number.isFinite(current)) throw new Error(`${color} PLA quantity is not numeric`);
-                    if (amount > current) throw new Error(`${color} PLA stock insufficient. Remaining: ${current} g`);
-                    updates[`component_data/${id}/quantity`] = current - amount;
-                    stampQuantityHistory(updates, id, current, current - amount);
+                    rollsUsed[color] = Math.round(amount / filamentRollWeight(item[1]) * 1000) / 1000;
+                    deductFilamentGrams(updates, item, amount, color);
                 }
 
                 const logRef = push(ref(database, 'filament_printing_daily_data'));
                 updates[`filament_printing_daily_data/${logRef.key}`] = {
                     date: record.date, timestamp: new Date().toISOString(), parts: record.parts,
                     blackFilamentUsed: record.blackFilamentUsed, whiteFilamentUsed: record.whiteFilamentUsed,
-                    blackFilamentComponentId: black ? black[0] : '', whiteFilamentComponentId: white ? white[0] : ''
+                    blackFilamentComponentId: black ? black[0] : '', whiteFilamentComponentId: white ? white[0] : '',
+                    blackRollsUsed: rollsUsed.Black, whiteRollsUsed: rollsUsed.White
                 };
                 await update(ref(database), updates);
-                showModal('Success', 'Today\'s printing recorded.');
+                const used = [['Black', record.blackFilamentUsed], ['White', record.whiteFilamentUsed]]
+                    .filter(([, g]) => g > 0).map(([c, g]) => `${c} ${formatGrams(g)} (${formatRolls(rollsUsed[c])})`);
+                showModal('Success', 'Today\'s printing recorded.' + (used.length ? ` Deducted from stock: ${used.join(', ')}.` : ''));
                 clearDailyPrintingForm();
                 await loadTodayPrintingData();
                 await refreshPrintRoomFilamentStock();
@@ -6113,7 +6312,8 @@
 
         // ============================================================
         // PRINT WALL LINK: finished prints waiting for confirmation
-        // Print Wall writes each successfully finished print to printwall_pending_prints.
+        // Print Wall keeps each successfully finished print on the farm computer; this page reads them
+        // from Print Wall's address on the local network (GET /api/finished-prints, every few seconds).
         // Nothing is counted until it is confirmed here; confirming adds a normal
         // filament_printing_daily_data record (and deducts the filament), exactly like
         // "Record Today's Printing". printwall_file_map remembers the part per file.
@@ -6121,6 +6321,10 @@
         let pwPending = {};
         let pwFileMap = {};
         let pwWatching = false;
+        let pwAddress = '';
+        let pwRenderedIds = null;
+        let pwPollTimer = null;
+        const PW_POLL_MS = 10000;
 
         const pwEsc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
         const pwKey = (file) => String(file || '').toLowerCase().replace(/[.#$\[\]\/]/g, '_').slice(0, 200) || 'unknown';
@@ -6143,7 +6347,7 @@
             return bestScore >= 0.5 ? { part: best } : null;
         }
 
-        function renderPwPending() {
+        function renderPwPending(force) {
             const entries = Object.entries(pwPending || {}).filter(([, e]) => e && e.status === 'pending')
                 .sort((a, b) => String(b[1].finishedAt).localeCompare(String(a[1].finishedAt)));
             const badge = document.getElementById('pwPendingBadge');
@@ -6152,8 +6356,11 @@
             if (count) count.textContent = entries.length ? `(${entries.length})` : '';
             const body = document.getElementById('pwPendingBody');
             if (!body) return;
+            const ids = entries.map(([id]) => id).join('|') + '#' + Object.keys(pwFileMap || {}).length + '#' + Object.keys(PRINTED_PART_WEIGHTS || {}).length;
+            if (!force && ids === pwRenderedIds) return;
+            pwRenderedIds = ids;
             if (!entries.length) {
-                body.innerHTML = '<tr><td colspan="8" class="loading"><p>No finished prints waiting. They appear here automatically when a print finishes.</p></td></tr>';
+                body.innerHTML = `<tr><td colspan="8" class="loading"><p>${pwAddress ? 'No finished prints waiting. They appear here automatically when a print finishes.' : 'Enter the Print Wall address above to receive finished prints automatically.'}</p></td></tr>`;
                 return;
             }
             body.innerHTML = entries.map(([id, e]) => {
@@ -6174,7 +6381,12 @@
                         <option value="">Select</option><option value="black"${color === 'black' ? ' selected' : ''}>Black</option><option value="white"${color === 'white' ? ' selected' : ''}>White</option></select></td>
                     <td><input class="form-input pw-printed" type="number" min="0" step="1" value="${Number(printed) || 0}" style="width:80px;"></td>
                     <td><input class="form-input pw-damaged" type="number" min="0" step="1" value="0" style="width:80px;"></td>
-                    <td><input class="form-input pw-grams" type="number" min="0" step="0.1" value="${e.grams != null ? Number(e.grams) : ''}" placeholder="0.0" style="width:90px;"></td>
+                    <td>${(() => {
+                        // Print Wall sends only the count; the filament comes from weight / piece × (printed + damaged)
+                        const w = guess.part ? getPartWeight(guess.part) : 0;
+                        const auto = w > 0 ? Math.round(w * (Number(printed) || 0) * 10) / 10 : '';
+                        return `<input class="form-input pw-grams" data-auto="1" type="number" min="0" step="0.1" value="${auto}" placeholder="0.0" style="width:90px;" title="Auto: weight per piece × (printed + damaged)">`;
+                    })()}</td>
                     <td style="white-space:nowrap;">
                         <button class="action-btn add-btn" onclick="confirmPrintWallPrint('${pwEsc(id)}')"><i class="fas fa-check"></i> Confirm</button>
                         <button class="action-btn delete-btn" onclick="dismissPrintWallPrint('${pwEsc(id)}')"><i class="fas fa-xmark"></i> Dismiss</button>
@@ -6182,15 +6394,100 @@
             }).join('');
         }
 
+        // Keep the auto grams of a pending print in step with its part and counts
+        // (stops once the grams box is typed into by hand)
+        function pwRecalcRowGrams(ev) {
+            const row = ev.target.closest('tr[data-pw-id]');
+            if (!row) return;
+            const gramsIn = row.querySelector('.pw-grams');
+            if (ev.target === gramsIn) { delete gramsIn.dataset.auto; return; }
+            if (!gramsIn || gramsIn.dataset.auto !== '1') return;
+            const w = getPartWeight(row.querySelector('.pw-part').value);
+            const pieces = Number(row.querySelector('.pw-printed').value || 0) + Number(row.querySelector('.pw-damaged').value || 0);
+            gramsIn.value = w > 0 ? Math.round(w * pieces * 10) / 10 : '';
+        }
+
+        // ---- talking to Print Wall on the local network ----
+        function pwNormalizeAddress(v) {
+            let a = String(v || '').trim().replace(/\/+$/, '');
+            if (!a) return '';
+            if (!/^https?:\/\//i.test(a)) a = 'http://' + a;
+            try { const u = new URL(a); if (!u.port && u.protocol === 'http:') u.port = '3000'; return u.origin; } catch (_) { return ''; }
+        }
+        function pwSetStatus(text, color) {
+            const el = document.getElementById('pwLinkStatus');
+            if (el) { el.innerHTML = text; el.style.color = color || 'var(--text-secondary)'; }
+        }
+        function pwBlockedHint() {
+            const pageHttps = location.protocol === 'https:';
+            const local = /^http:\/\/(localhost|127\.0\.0\.1)(:|$)/i.test(pwAddress);
+            if (pageHttps && pwAddress.startsWith('http:') && !local) {
+                return ' This ToyFlow page is opened from an <strong>https://</strong> address, and the browser blocks it from reaching a plain <strong>http://</strong> address on your network. ' +
+                    'Open ToyFlow on the farm computer and use <strong>http://localhost:3000</strong>, or open ToyFlow from the saved index.html file on this computer.';
+            }
+            return ' Check that Print Wall is running on the farm computer, that this computer is on the same network, and that the address matches Print Wall → Manage → Filament Tracker. ' +
+                'If the browser asks to allow access to devices on your local network, choose Allow.';
+        }
+        async function pwRequest(path, options = {}) {
+            const res = await fetch(pwAddress + path, { cache: 'no-store', ...options,
+                headers: { ...(options.method === 'POST' ? { 'X-Requested-With': 'toyflow' } : {}), ...(options.headers || {}) },
+                signal: AbortSignal.timeout(8000) });
+            let body = null;
+            try { body = await res.json(); } catch (_) { /* no body */ }
+            return { ok: res.ok, status: res.status, body };
+        }
+        async function pollPrintWall() {
+            clearTimeout(pwPollTimer);
+            if (!pwAddress) { pwPending = {}; renderPwPending(true); pwSetStatus('Not connected to Print Wall yet.'); return; }
+            try {
+                const r = await pwRequest('/api/finished-prints');
+                if (!r.ok || !r.body || !Array.isArray(r.body.prints)) throw new Error(r.status === 404 ? 'this Print Wall is an older version without the Filament Tracker link' : `HTTP ${r.status}`);
+                const next = {};
+                r.body.prints.forEach(e => { if (e && e.id) next[e.id] = { ...e, status: 'pending' }; });
+                pwPending = next;
+                renderPwPending();
+                pwSetStatus(`<i class="fas fa-circle" style="font-size:9px;"></i> Connected to Print Wall on <strong>${pwEsc(r.body.farm || pwAddress)}</strong> (${r.body.printers} printer${r.body.printers === 1 ? '' : 's'}). Checking every ${PW_POLL_MS / 1000} s.`, 'var(--success)');
+            } catch (e) {
+                const why = e && e.name === 'TimeoutError' ? 'no answer' : (e && e.message && !/fetch/i.test(e.message) ? e.message : 'could not connect');
+                pwSetStatus(`<i class="fas fa-triangle-exclamation"></i> Cannot reach Print Wall at <strong>${pwEsc(pwAddress)}</strong> (${pwEsc(why)}).` + pwBlockedHint(), 'var(--warning)');
+            } finally {
+                pwPollTimer = setTimeout(pollPrintWall, PW_POLL_MS);
+            }
+        }
+        async function savePrintWallAddress() {
+            const raw = document.getElementById('pwAddressInput').value;
+            const addr = pwNormalizeAddress(raw);
+            if (raw.trim() && !addr) { showModal('Error', 'Enter the Print Wall address, for example http://192.168.1.20:3000'); return; }
+            pwAddress = addr;
+            document.getElementById('pwAddressInput').value = addr;
+            try { localStorage.setItem('toyflow.printWallAddress', addr); } catch (_) { /* private mode */ }
+            try {   // shared with every computer that opens ToyFlow
+                const { ref, set } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                await set(ref(window.firebaseDatabase, 'printwall_link/address'), addr || null);
+            } catch (e) { console.error(e); }
+            pwRenderedIds = null;
+            pollPrintWall();
+        }
+
         async function startPrintWallWatch() {
             if (pwWatching) return;
             const database = window.firebaseDatabase;
             if (!database) { setTimeout(startPrintWallWatch, 1000); return; }
             pwWatching = true;
-            const { ref, onValue } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+            const { ref, onValue, get } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+            const pwBody = document.getElementById('pwPendingBody');
+            if (pwBody) { pwBody.addEventListener('input', pwRecalcRowGrams); pwBody.addEventListener('change', pwRecalcRowGrams); }
             try { await syncPrintedPartsMaster(); } catch (e) { console.error(e); }
+            await loadPrintedPartWeights();
             onValue(ref(database, 'printwall_file_map'), snap => { pwFileMap = snap.exists() ? snap.val() : {}; renderPwPending(); });
-            onValue(ref(database, 'printwall_pending_prints'), snap => { pwPending = snap.exists() ? snap.val() : {}; renderPwPending(); });
+            // This browser's own address wins; otherwise the one saved for everyone
+            let addr = '';
+            try { addr = localStorage.getItem('toyflow.printWallAddress') || ''; } catch (_) { /* private mode */ }
+            if (!addr) { try { const snap = await get(ref(database, 'printwall_link/address')); addr = snap.exists() ? String(snap.val()) : ''; } catch (e) { console.error(e); } }
+            pwAddress = pwNormalizeAddress(addr);
+            const input = document.getElementById('pwAddressInput');
+            if (input) input.value = pwAddress;
+            pollPrintWall();
         }
 
         async function confirmPrintWallPrint(id) {
@@ -6210,12 +6507,15 @@
             if (printed + damaged <= 0) { showModal('Error', 'Enter at least one printed or damaged part.'); return; }
             const buttons = row.querySelectorAll('button');
             buttons.forEach(b => b.disabled = true);
+            let claimed = false, saved = false;
             try {
                 const database = window.firebaseDatabase;
-                const { ref, get, update, push } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
-                // someone else may have confirmed it a moment ago
-                const still = await get(ref(database, `printwall_pending_prints/${id}`));
-                if (!still.exists()) { showModal('Info', 'This print was already confirmed or dismissed.'); return; }
+                const { ref, update, push } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                // Take it off Print Wall's list first, so two people cannot count the same print
+                const claim = await pwRequest(`/api/finished-prints/${encodeURIComponent(id)}/claim?action=confirmed`, { method: 'POST' });
+                if (claim.status === 409) { showModal('Info', 'This print was already confirmed or dismissed.'); delete pwPending[id]; renderPwPending(true); return; }
+                if (!claim.ok) throw new Error(`Print Wall did not accept the confirmation (HTTP ${claim.status}).`);
+                claimed = true;
 
                 const { byColor } = await getPrintRoomFilaments();
                 const black = chooseFilament(byColor, 'black');
@@ -6225,13 +6525,10 @@
                     const item = color === 'black' ? black : white;
                     const label = color === 'black' ? 'Black' : 'White';
                     if (!item) throw new Error(`${label} PLA component not found`);
-                    const [cid, c] = item;
-                    const current = Number(c.quantity);
-                    if (!Number.isFinite(current)) throw new Error(`${label} PLA quantity is not numeric`);
-                    if (grams > current) throw new Error(`${label} PLA stock insufficient. Remaining: ${current} g`);
-                    updates[`component_data/${cid}/quantity`] = current - grams;
-                    stampQuantityHistory(updates, cid, current, current - grams);
+                    deductFilamentGrams(updates, item, grams, label);
                 }
+                const gramsItem = color === 'black' ? black : white;
+                const rollsUsed = grams > 0 && gramsItem ? Math.round(grams / filamentRollWeight(gramsItem[1]) * 1000) / 1000 : 0;
                 const isBlack = color === 'black';
                 const key = push(ref(database, 'filament_printing_daily_data')).key;
                 updates[`filament_printing_daily_data/${key}`] = {
@@ -6239,19 +6536,24 @@
                     parts: { [part]: { blackPrinted: isBlack ? printed : 0, blackDamaged: isBlack ? damaged : 0,
                         whitePrinted: isBlack ? 0 : printed, whiteDamaged: isBlack ? 0 : damaged } },
                     blackFilamentUsed: isBlack ? grams : 0, whiteFilamentUsed: isBlack ? 0 : grams,
+                    blackRollsUsed: isBlack ? rollsUsed : 0, whiteRollsUsed: isBlack ? 0 : rollsUsed,
                     blackFilamentComponentId: black ? black[0] : '', whiteFilamentComponentId: white ? white[0] : '',
                     source: 'printwall', printer: entry.printer || '', file: entry.file || '', finishedAt: entry.finishedAt || ''
                 };
-                updates[`printwall_pending_prints/${id}`] = null;
                 updates[`printwall_file_map/${pwKey(entry.file)}`] = { part, color, count: printed + damaged, file: entry.file || '' };
                 await update(ref(database), updates);
+                saved = true;
+                delete pwPending[id];
+                renderPwPending(true);
                 showModal('Success', `${printed} × ${part} (${isBlack ? 'Black' : 'White'}) added to the printing records` +
                     (entry.date && entry.date !== localDateISO() ? ` for ${entry.date}` : '') + '.');
                 await loadTodayPrintingData();
                 await refreshPrintRoomFilamentStock();
                 if (document.getElementById('productComponentsManagementPortal')?.style.display !== 'none') await loadProductComponentsData();
             } catch (e) {
-                showModal('Error', e.message);
+                // Saving failed after Print Wall let go of it: put it back on Print Wall's list
+                if (claimed && !saved) { try { await pwRequest(`/api/finished-prints/${encodeURIComponent(id)}/release`, { method: 'POST' }); } catch (_) { /* shown below */ } }
+                showModal('Error', e && e.name === 'TypeError' ? 'Cannot reach Print Wall right now. Try again in a moment.' : e.message);
                 console.error(e);
             } finally {
                 buttons.forEach(b => b.disabled = false);
@@ -6263,9 +6565,11 @@
             if (!entry) return;
             if (!confirm(`Dismiss ${entry.file} from ${entry.printer}? It will not be counted.`)) return;
             try {
-                const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
-                await update(ref(window.firebaseDatabase), { [`printwall_pending_prints/${id}`]: null });
-            } catch (e) { showModal('Error', e.message); }
+                const r = await pwRequest(`/api/finished-prints/${encodeURIComponent(id)}/claim?action=dismissed`, { method: 'POST' });
+                if (!r.ok && r.status !== 409) throw new Error(`Print Wall did not accept this (HTTP ${r.status}).`);
+                delete pwPending[id];
+                renderPwPending(true);
+            } catch (e) { showModal('Error', e && e.name === 'TypeError' ? 'Cannot reach Print Wall right now. Try again in a moment.' : e.message); }
         }
 
         window.addEventListener('load', () => setTimeout(startPrintWallWatch, 300));
@@ -6281,6 +6585,7 @@
             document.querySelectorAll('.menu-item')[6].classList.add('active');
             closeSidebar();
             await syncPrintedPartsMaster();
+            await loadPrintedPartWeights();
             buildPrintPartRows();
             const date = document.getElementById('filamentPrintDateInput');
             if (date) date.value = localDateISO();
