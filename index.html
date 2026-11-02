@@ -7073,7 +7073,7 @@
         // Take a finished (or stopped) print's filament out of stock, once
         async function pwAutoDeduct(e) {
             if (!e || !e.id || pwDeducting.has(e.id) || pwLedger[e.id]) return;
-            if (e.infoPending || !(e.kind === 'finished' || e.kind === 'failed' || !e.kind)) return;   // 'unknown' waits for a person
+            if (e.infoPending || e.catchUp || !(e.kind === 'finished' || e.kind === 'failed' || !e.kind)) return;   // 'unknown' and catch-ups wait for a person
             const split = pwSplit(e);
             if (split.black + split.white <= 0) return;                                                // nothing known to take
             pwDeducting.add(e.id);
@@ -7132,7 +7132,8 @@
                 const partOptions = ['<option value="">Select part</option>']
                     .concat(PRINTED_PARTS.map(p => `<option value="${pwEsc(p)}"${p === guess.part ? ' selected' : ''}>${pwEsc(p)}</option>`)).join('');
                 const kindPill = kind === 'failed' ? `<span class="pill warn" title="The print was stopped or failed">Stopped at ${pwEsc(e.percent ?? '?')}%</span>`
-                    : kind === 'unknown' ? `<span class="pill warn" title="${pwEsc(e.note || '')}">Check this print</span>` : '';
+                    : kind === 'unknown' ? `<span class="pill warn" title="${pwEsc(e.note || '')}">Check this print</span>`
+                    : e.catchUp ? `<span class="pill warn" title="${pwEsc(e.note || '')}">Check: found after reconnecting</span>` : '';
                 const note = e.note ? `<br><small style="color:var(--text-secondary);">${pwEsc(e.note)}</small>` : '';
                 // filament for the whole print
                 const split = pwSplit(e);
@@ -7145,14 +7146,15 @@
                 } else {
                     const w = guess.part ? getPartWeight(guess.part) : 0;
                     grams = w > 0 ? pwRound(w * pieces) : '';
-                    source = `<div class="pw-gsrc">${e.infoPending ? 'Reading the file…' : (w > 0 ? 'Weight / piece' : 'Set weight / piece')}</div>`;
+                    source = `<div class="pw-gsrc">${e.infoPending ? 'Reading the file…' : (w > 0 ? 'Weight / piece' : 'Enter the grams')}</div>` +
+                        (!e.infoPending && e.infoNote ? `<div class="pw-ledger bad" title="${pwEsc(e.infoNote)}">${pwEsc(e.infoNote)}</div>` : '');
                 }
                 if (led && (led.status === 'deducted' || led.status === 'deducting')) {
                     const taken = pwRound((led.black || 0) + (led.white || 0));
                     ledgerLine = `<div class="pw-ledger ok" title="${pwEsc(pwSplitText(led))}"><i class="fas fa-circle-check"></i> ${formatGrams(taken)} taken from stock</div>`;
                     if (led.notTaken && Object.keys(led.notTaken).length) ledgerLine += `<div class="pw-ledger bad">${pwEsc(Object.values(led.notTaken).join('; '))}</div>`;
                     if (led.other) ledgerLine += `<div class="pw-ledger">${formatGrams(led.other)} of another colour not tracked</div>`;
-                } else if (kind === 'unknown') ledgerLine = '<div class="pw-ledger">Taken from stock when confirmed</div>';
+                } else if (kind === 'unknown' || e.catchUp) ledgerLine = '<div class="pw-ledger">Taken from stock when confirmed</div>';
                 else if (e.infoPending) ledgerLine = '<div class="pw-ledger">Waiting for the filament figure…</div>';
                 else if (!(Number(e.grams) > 0)) ledgerLine = '<div class="pw-ledger">Taken from stock when confirmed</div>';
                 const multi = (split.black > 0) + (split.white > 0) + (split.other > 0) > 1 ? `<div class="pw-ledger">${pwEsc(pwSplitText(split))}</div>` : '';
@@ -7335,9 +7337,10 @@
                 const updates = {};
                 // Print Wall's grams also teach the part's weight per piece, if it has none yet
                 const finalTotal = final.black + final.white;
-                if (part && gramsSource === 'printwall' && entry.kind !== 'failed' && finalTotal > 0 && printed + damaged > 0 && !getPartWeight(part)) {
+                // (grams typed by hand teach it too, so the other prints of the same part fill in)
+                if (part && (gramsSource === 'printwall' || gramsSource === 'manual') && entry.kind !== 'failed' && finalTotal > 0 && printed + damaged > 0 && !getPartWeight(part)) {
                     const learnt = Math.round(finalTotal / (printed + damaged) * 10) / 10;
-                    updates[`printed_part_weights/${partWeightKey(part)}`] = { part, grams: learnt, updatedAt: new Date().toISOString(), source: 'printwall' };
+                    updates[`printed_part_weights/${partWeightKey(part)}`] = { part, grams: learnt, updatedAt: new Date().toISOString(), source: gramsSource };
                     PRINTED_PART_WEIGHTS[partWeightKey(part)] = { part, grams: learnt };
                 }
                 if (part) updates[`printwall_file_map/${pwKey(entry.file)}`] = { part, color, count: printed + damaged, file: entry.file || '' };
@@ -7384,12 +7387,21 @@
             const msg = `Dismiss ${entry.file} from ${entry.printer}? Its parts will not be counted.` +
                 (taken ? `\n\nThe ${formatGrams(taken)} of filament it used stays taken from stock, because it was printed.` : '');
             if (!confirm(msg)) return;
+            // a duplicate (already counted) or a print that never really happened: its filament goes back
+            const giveBack = taken > 0 && confirm(`Give the ${formatGrams(taken)} back to the filament stock?\n\nChoose OK only if this print was a duplicate of one already counted, or was never really printed. Choose Cancel to keep it taken from stock.`);
             try {
                 const r = await pwRequest(`/api/finished-prints/${encodeURIComponent(id)}/claim?action=dismissed`, { method: 'POST' });
                 if (!r.ok && r.status !== 409) throw new Error(`Print Wall did not accept this (HTTP ${r.status}).`);
                 if (led) {
                     const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
-                    await update(ref(window.firebaseDatabase), { [`printwall_filament_ledger/${id}/status`]: 'dismissed', [`printwall_filament_ledger/${id}/dismissedAt`]: new Date().toISOString() });
+                    if (giveBack) {
+                        for (const c of ['black', 'white']) if (Number(led[c]) > 0) await pwChangeStock(c, -Number(led[c]));
+                    }
+                    await update(ref(window.firebaseDatabase), giveBack
+                        ? { [`printwall_filament_ledger/${id}/status`]: 'returned', [`printwall_filament_ledger/${id}/returnedAt`]: new Date().toISOString(),
+                            [`printwall_filament_ledger/${id}/returned`]: { black: Number(led.black || 0), white: Number(led.white || 0) } }
+                        : { [`printwall_filament_ledger/${id}/status`]: 'dismissed', [`printwall_filament_ledger/${id}/dismissedAt`]: new Date().toISOString() });
+                    if (giveBack) { showModal('Success', `${formatGrams(taken)} given back to the filament stock.`); refreshPrintRoomFilamentStock(); }
                 }
                 delete pwPending[id];
                 renderPwPending(true);
