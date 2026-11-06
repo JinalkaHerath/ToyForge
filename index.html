@@ -2081,6 +2081,11 @@
             background: color-mix(in srgb, var(--panel) 40%, transparent); border: 1px solid var(--line); box-shadow: inset 0 1px 0 var(--sheen); }
         .site-footer b { color: var(--ink); font-weight: 650; letter-spacing: .08em; }
         .portal-title > i.ic { display: none !important; }
+        .dc-dates { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+        .dc-chip { font: inherit; font-size: 12px; border: 1px solid var(--border-color, rgba(128,128,128,.35)); background: transparent; color: var(--text-primary, inherit); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+        .dc-chip.on { background: #2563eb; border-color: #2563eb; color: #fff; font-weight: 600; }
+        #dcBody tr.dc-has td:first-child b::after { content: " •"; color: var(--primary, #2563eb); }
+        #dcBody tr.dc-changed { background: rgba(37, 99, 235, .06); }
         .pw-all { display: flex; gap: 10px; justify-content: flex-end; margin: 0 0 10px; }
         .daily-typed { display: block; color: var(--warning); font-size: 12px; margin-top: 4px; }
         .daily-typed[hidden] { display: none; }
@@ -3258,6 +3263,32 @@
                     </div>
                 </div>
 
+                <div class="supplier-form-section" id="dateCountsSection">
+                    <div class="form-header"><i class="fas fa-calendar-check"></i><span>Counts by date</span></div>
+                    <p style="margin:0 0 14px;color:var(--text-secondary);font-size:13px;">
+                        Record the parts counted on a particular day. The counts can be changed at any time: choose the day, change the numbers and press
+                        <strong>Save counts</strong>. They are added to the totals above (and to the dashboard and the Print Schedule).
+                    </p>
+                    <div class="ph-bar-top" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px;">
+                        <button class="action-btn clear-btn" type="button" onclick="dcShift(-1)" title="Previous day"><i class="fas fa-chevron-left"></i></button>
+                        <input id="dcDate" type="date" class="form-input" style="width:auto;" onchange="dcSetDate(this.value)">
+                        <button class="action-btn clear-btn" type="button" onclick="dcShift(1)" title="Next day"><i class="fas fa-chevron-right"></i></button>
+                        <button class="action-btn clear-btn" type="button" onclick="dcSetDate(localDateISO())">Today</button>
+                        <span id="dcDayTotal" style="color:var(--text-secondary);font-size:13px;"></span>
+                    </div>
+                    <div id="dcDates" class="dc-dates"></div>
+                    <div class="table-wrapper" style="max-height:460px;overflow:auto;">
+                        <table class="employee-table">
+                            <thead><tr><th>Printed Part</th><th>Black Printed</th><th>Black Damaged</th><th>White Printed</th><th>White Damaged</th><th>Total</th></tr></thead>
+                            <tbody id="dcBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="form-actions" style="margin-top:12px;">
+                        <button class="action-btn add-btn" type="button" id="dcSave" onclick="saveDateCounts()" disabled><i class="fas fa-save"></i> Save counts</button>
+                        <button class="action-btn clear-btn" type="button" onclick="renderDateCounts()">Undo changes</button>
+                    </div>
+                </div>
+
                 <div class="supplier-form-section">
                     <div class="form-header">
                         <i class="fas fa-list-ul"></i>
@@ -3701,6 +3732,27 @@
                                 <tbody id="todayPrintingHistoryBody"></tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+
+                <div class="supplier-form-section" id="printWeightsSection">
+                    <div class="form-header"><i class="fas fa-weight-hanging"></i><span>Print weights</span></div>
+                    <p style="margin:0 0 14px;color:var(--text-secondary);font-size:13px;">
+                        The filament one print of each part uses. It fills in the filament of prints added by hand, of <strong>Today's Printing</strong>
+                        (the <em>Weight / Piece</em> column) and of F.O.R.G.E prints whose file could not be read. Change a weight and press <strong>Save</strong> (or Enter) at any time.
+                    </p>
+                    <div class="form-row">
+                        <div class="form-group"><label for="pwtSearch">Find a part</label><input id="pwtSearch" class="form-input" placeholder="Search" oninput="renderPrintWeights()" autocomplete="off"></div>
+                        <div class="form-group"><label for="pwtNewName">New part</label><input id="pwtNewName" class="form-input" placeholder="for example 40 Metal Servo Mount" autocomplete="off"></div>
+                        <div class="form-group"><label for="pwtNewGrams">Weight of one print (g)</label><input id="pwtNewGrams" type="number" min="0" step="0.1" class="form-input" placeholder="0.0"></div>
+                        <div class="form-group" style="align-self:flex-end;"><button class="action-btn add-btn" type="button" onclick="addPrintWeightPart()"><i class="fas fa-plus"></i> Add part</button></div>
+                    </div>
+                    <p id="pwtNote" style="margin:0 0 8px;font-size:13px;color:var(--success, #1a9e4b);"></p>
+                    <div class="table-wrapper" style="max-height:420px;overflow:auto;">
+                        <table class="employee-table">
+                            <thead><tr><th>Printed part</th><th>Weight of one print</th><th>Where it came from</th><th></th></tr></thead>
+                            <tbody id="printWeightsBody"></tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -5582,7 +5634,7 @@
             document.querySelectorAll('.menu-item')[9].classList.add('active');
             closeSidebar();
             clearPrintedPartForm();
-            loadProductComponentsData();
+            applyPrintWeightsV1().finally(() => { loadProductComponentsData().then(() => { dcDate = dcDate || localDateISO(); loadDateCounts(); }); });
             showProductComponentsView(pcView || 'stock');
         }
 
@@ -5769,6 +5821,95 @@
             } catch (e) { showModal('Error', e.message); }
         }
 
+        /* ---------- Counts by date (Product Components): parts counted for a particular day, editable at any time.
+           Firebase: product_components_date_counts/<YYYY-MM-DD>/<part key> = { part, blackPrinted, blackDamaged, whitePrinted, whiteDamaged }
+           They are added to the part totals (the table above, the dashboard and the Print Schedule). ---------- */
+        const DC_FIELDS = ['blackPrinted', 'blackDamaged', 'whitePrinted', 'whiteDamaged'];
+        let dcDate = '', dcAll = {};
+        async function fetchDateCounts() {
+            const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+            const snap = await get(ref(window.firebaseDatabase, 'product_components_date_counts'));
+            return snap.exists() ? snap.val() || {} : {};
+        }
+        function addDateCounts(totals, all) {
+            Object.values(all || {}).forEach(day => Object.values(day || {}).forEach(r => {
+                if (!r || !r.part) return;
+                if (!totals[r.part]) totals[r.part] = { blackPrinted: 0, whitePrinted: 0, blackDamaged: 0, whiteDamaged: 0 };
+                DC_FIELDS.forEach(k => totals[r.part][k] += Number(r[k] || 0));
+            }));
+            return totals;
+        }
+        function dcShift(days) {
+            const d = new Date((dcDate || localDateISO()) + 'T12:00:00');
+            d.setDate(d.getDate() + days);
+            dcSetDate(localDateISO(d));
+        }
+        function dcSetDate(date) {
+            const input = document.getElementById('dcDate');
+            if (date > localDateISO()) date = localDateISO();
+            dcDate = date || localDateISO();
+            if (input) input.value = dcDate;
+            renderDateCounts();
+        }
+        async function loadDateCounts() {
+            try { dcAll = await fetchDateCounts(); } catch (e) { console.error(e); dcAll = {}; }
+            if (!dcDate) dcDate = localDateISO();
+            const input = document.getElementById('dcDate');
+            if (input) { input.value = dcDate; input.max = localDateISO(); }
+            renderDateCounts();
+        }
+        function renderDateCounts() {
+            const body = document.getElementById('dcBody');
+            if (!body) return;
+            const day = dcAll[dcDate] || {};
+            const byPart = {};
+            Object.values(day).forEach(r => { if (r && r.part) byPart[r.part] = r; });
+            const parts = [...PRINTED_PARTS, ...Object.keys(byPart).filter(p => !PRINTED_PARTS.includes(p))];
+            body.innerHTML = parts.map(part => {
+                const r = byPart[part] || {};
+                return `<tr data-part="${escapeHTML(part)}"${Object.keys(r).length ? ' class="dc-has"' : ''}><td><b>${escapeHTML(part)}</b></td>` +
+                    DC_FIELDS.map(k => `<td><input class="form-input dc-n" data-k="${k}" type="number" min="0" step="1" value="${Number(r[k] || 0)}" style="width:90px;"></td>`).join('') +
+                    `<td class="num dc-sum">${DC_FIELDS.reduce((s, k) => s + Number(r[k] || 0), 0) || '—'}</td></tr>`;
+            }).join('');
+            body.querySelectorAll('.dc-n').forEach(i => i.addEventListener('input', () => {
+                const tr = i.closest('tr');
+                tr.querySelector('.dc-sum').textContent = [...tr.querySelectorAll('.dc-n')].reduce((s, x) => s + Number(x.value || 0), 0) || '—';
+                document.getElementById('dcSave').disabled = false;
+                tr.classList.add('dc-changed');
+            }));
+            document.getElementById('dcSave').disabled = true;
+            // the days that have counts, newest first
+            const dates = Object.keys(dcAll).filter(d => Object.values(dcAll[d] || {}).some(r => r && DC_FIELDS.some(k => Number(r[k]) > 0))).sort().reverse();
+            const list = document.getElementById('dcDates');
+            if (list) list.innerHTML = dates.length ? 'Days with counts: ' + dates.slice(0, 20).map(d =>
+                `<button type="button" class="dc-chip${d === dcDate ? ' on' : ''}" onclick="dcSetDate('${d}')">${new Date(d + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</button>`).join('') : 'No counts recorded by date yet.';
+            const sum = Object.values(byPart).reduce((s, r) => s + DC_FIELDS.reduce((t, k) => t + Number(r[k] || 0), 0), 0);
+            const label = document.getElementById('dcDayTotal');
+            if (label) label.textContent = sum ? `${dashNum(sum)} parts counted on this day` : 'Nothing counted on this day yet';
+        }
+        async function saveDateCounts() {
+            const body = document.getElementById('dcBody'), btn = document.getElementById('dcSave');
+            const bad = [...body.querySelectorAll('.dc-n')].find(i => !(Number.isInteger(Number(i.value || 0)) && Number(i.value || 0) >= 0));
+            if (bad) { showModal('Error', 'Counts must be whole numbers of 0 or more.'); return; }
+            if (dcDate > localDateISO()) { showModal('Error', 'The date cannot be in the future.'); return; }
+            btn.disabled = true;
+            try {
+                const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                const updates = {};
+                body.querySelectorAll('tr[data-part]').forEach(tr => {
+                    const part = tr.dataset.part, vals = {};
+                    tr.querySelectorAll('.dc-n').forEach(i => { vals[i.dataset.k] = Number(i.value || 0); });
+                    const any = DC_FIELDS.some(k => vals[k] > 0);
+                    updates[`product_components_date_counts/${dcDate}/${partWeightKey(part)}`] = any ? { part, ...vals, updatedAt: new Date().toISOString() } : null;
+                });
+                await update(ref(window.firebaseDatabase), updates);
+                dcAll = await fetchDateCounts();
+                renderDateCounts();
+                await loadProductComponentsData();   // the totals above include these counts
+                showModal('Success', `Counts for ${new Date(dcDate + 'T12:00:00').toLocaleDateString()} saved. The part totals are updated.`);
+            } catch (e) { showModal('Error', e.message); btn.disabled = false; }
+        }
+
         async function fetchAllPrintedPartTotals() {
             const database = window.firebaseDatabase;
             if (!database) throw new Error('Firebase database not initialized');
@@ -5799,6 +5940,8 @@
                 totals[part].blackDamaged += Number(m.blackDamaged || 0);
                 totals[part].whiteDamaged += Number(m.whiteDamaged || 0);
             });
+            // counts recorded by date (Counts by date table)
+            try { dcAll = await fetchDateCounts(); addDateCounts(totals, dcAll); } catch (e) { console.error(e); }
             return totals;
         }
 
@@ -6768,6 +6911,95 @@
             } catch (e) { showModal('Error', e.message); console.error(e); }
         }
 
+        /* ---------- Print weights: the filament one print (one piece of a part) uses, kept and editable here ---------- */
+        // Weights given by ROBOTSZU (Nov 2026), applied once; after that they are edited in the Print weights table
+        const PRINT_WEIGHTS_V1 = [
+            ['Plastic Servo Mount', 112], ['Metal Servo Mount', 156], ['Lid LED Cap', 53], ['Optimized Bottom', 302],
+            ['Lid arms - Left', 93], ['Lid arms - Right', 83], ['Optimized Lid', 141], ['Octo Arm', 348],
+            ['Toggle Switch Panel', 128], ['Toggle Switch Panel Cover', 94], ['L Bracket', 214],
+            ['40 Metal Servo Mount', 254, true], ['34 Plastic Servo Mount', 212, true], ['2 Optimized Lid', 283, true],
+        ];
+        const pwNorm = (t) => String(t || '').toLowerCase().replace(/optimi[sz]ed/g, 'optimized').replace(/[^a-z0-9]/g, '').replace(/s$/, '');
+        function matchPart(name, exactOnly) {
+            const n = pwNorm(name);
+            const found = PRINTED_PARTS.find(p => pwNorm(p) === n) || PRINTED_PARTS.find(p => pwNorm(p).replace(/s/g, '') === n.replace(/s/g, ''));
+            if (found || exactOnly) return found || null;
+            // "Optimized Lid" is the part called "Lid" when no "Optimized Lid" exists
+            const plain = n.replace(/^optimized/, '');
+            return plain !== n ? PRINTED_PARTS.find(p => pwNorm(p) === plain) || null : null;
+        }
+        async function applyPrintWeightsV1() {
+            try {
+                const database = window.firebaseDatabase;
+                if (!database) return;
+                const { ref, get, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                if ((await get(ref(database, 'app_flags/print_weights_v1'))).exists()) return;
+                await syncPrintedPartsMaster();
+                await loadPrintedPartWeights();
+                const list = PRINTED_PARTS.slice(), updates = {}, added = [], set = [];
+                for (const [name, grams, isNew] of PRINT_WEIGHTS_V1) {
+                    let part = matchPart(name, isNew);
+                    if (!part) { part = name; list.push(part); added.push(part); PRINTED_PARTS = list; }
+                    updates[`printed_part_weights/${partWeightKey(part)}`] = { part, grams, updatedAt: new Date().toISOString(), source: 'list' };
+                    set.push(`${part}: ${grams} g`);
+                }
+                if (added.length) updates.printed_parts_master = list;
+                updates['app_flags/print_weights_v1'] = { at: new Date().toISOString(), added };
+                await update(ref(database), updates);
+                PRINTED_PARTS = list;
+                await loadPrintedPartWeights();
+                console.log('Print weights set:', set.join(', '), added.length ? '| new parts: ' + added.join(', ') : '');
+            } catch (e) { console.error('Print weights', e); }
+        }
+
+        function renderPrintWeights() {
+            const body = document.getElementById('printWeightsBody');
+            if (!body) return;
+            const q = (document.getElementById('pwtSearch')?.value || '').toLowerCase();
+            const rows = PRINTED_PARTS.filter(p => !q || p.toLowerCase().includes(q));
+            body.innerHTML = rows.length ? rows.map(part => {
+                const rec = PRINTED_PART_WEIGHTS[partWeightKey(part)] || {};
+                const w = getPartWeight(part);
+                const when = rec.updatedAt ? new Date(rec.updatedAt).toLocaleDateString() : '';
+                return `<tr data-part="${pwEsc(part)}">
+                    <td><b>${pwEsc(part)}</b></td>
+                    <td><input class="form-input pwt-g" type="number" min="0" step="0.1" value="${w || ''}" placeholder="not set" style="width:120px;"> g</td>
+                    <td><small style="color:var(--text-secondary);">${w ? (rec.source === 'printwall' ? 'Learnt from F.O.R.G.E' : rec.source === 'manual' ? 'From a print added by hand' : 'Set here') + (when ? ' · ' + when : '') : '—'}</small></td>
+                    <td style="white-space:nowrap;"><button class="action-btn add-btn pwt-save" type="button" disabled><i class="fas fa-save"></i> Save</button></td></tr>`;
+            }).join('') : '<tr><td colspan="4" class="loading"><p>No parts found</p></td></tr>';
+            body.querySelectorAll('tr[data-part]').forEach(tr => {
+                const input = tr.querySelector('.pwt-g'), btn = tr.querySelector('.pwt-save');
+                const save = async () => {
+                    btn.disabled = true;
+                    await savePrintedPartWeight(tr.dataset.part, input.value === '' ? 0 : input.value);
+                    buildPrintPartRows(); recalcDailyFilament(); renderPrintWeights();
+                    const note = document.getElementById('pwtNote');
+                    if (note) note.textContent = `Saved: ${tr.dataset.part} ${input.value ? formatGrams(Number(input.value)) : '(cleared)'} per print.`;
+                };
+                input.addEventListener('input', () => { btn.disabled = false; });
+                input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+                btn.addEventListener('click', save);
+            });
+        }
+        // a new part: added to the parts list of the Product Components and the Filament Tracker
+        async function addPrintWeightPart() {
+            const name = document.getElementById('pwtNewName').value.trim(), grams = Number(document.getElementById('pwtNewGrams').value || 0);
+            if (!name) { showModal('Error', 'Enter the part name.'); return; }
+            try {
+                await syncPrintedPartsMaster();
+                if (PRINTED_PARTS.some(p => p.toLowerCase() === name.toLowerCase())) { showModal('Error', 'This part already exists: change its weight in the table.'); return; }
+                const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                const list = [...PRINTED_PARTS, name], updates = { printed_parts_master: list };
+                if (grams > 0) updates[`printed_part_weights/${partWeightKey(name)}`] = { part: name, grams, updatedAt: new Date().toISOString() };
+                await update(ref(window.firebaseDatabase), updates);
+                PRINTED_PARTS = list;
+                await loadPrintedPartWeights();
+                document.getElementById('pwtNewName').value = ''; document.getElementById('pwtNewGrams').value = '';
+                buildPrintPartRows(); recalcDailyFilament(); renderPrintWeights(); renderPwPending(true);
+                showModal('Success', `${name} added to the parts${grams > 0 ? ` with ${formatGrams(grams)} per print` : ''}. It shows in the Product Components and the Filament Tracker.`);
+            } catch (e) { showModal('Error', e.message); }
+        }
+
         function buildPrintPartRows() {
             const body = document.getElementById('printPartsTrackerBody');
             if (!body) return;
@@ -7691,9 +7923,11 @@
             document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
             document.querySelectorAll('.menu-item')[6].classList.add('active');
             closeSidebar();
+            await applyPrintWeightsV1();
             await syncPrintedPartsMaster();
             await loadPrintedPartWeights();
             buildPrintPartRows();
+            renderPrintWeights();
             const date = document.getElementById('filamentPrintDateInput');
             if (date) date.value = localDateISO();
             const today = document.getElementById('filamentTrackerToday');
@@ -7996,7 +8230,7 @@
         // prints per day, filament used and left, printed parts available
         // (printed - used, as in Product Components) and parts used.
         // ============================================================
-        const DASH_PATHS = ['filament_printing_daily_data', 'printwall_filament_ledger', 'print_schedule', 'toy_recipes', 'component_data', 'product_components_manual_data',
+        const DASH_PATHS = ['product_components_date_counts', 'filament_printing_daily_data', 'printwall_filament_ledger', 'print_schedule', 'toy_recipes', 'component_data', 'product_components_manual_data',
             'assembly_data', 'toy_batch_data', 'printed_parts_master', 'supplier_data', 'sales_data'];
         const dashCache = {};
         let dashWatching = false, dashTimer = null, dashMetricsTimer = null;
@@ -8044,6 +8278,7 @@
             };
             dashPrintRecords().forEach(r => Object.entries(r.parts || {}).forEach(([part, p]) => add(part, p)));
             Object.entries(dashCache.product_components_manual_data || {}).forEach(([part, m]) => { if (m) add(part, m); });
+            addDateCounts(totals, dashCache.product_components_date_counts);
             return totals;
         }
 
